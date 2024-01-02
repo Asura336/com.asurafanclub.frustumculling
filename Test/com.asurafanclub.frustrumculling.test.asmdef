@@ -1,0 +1,17 @@
+{
+    "name": "com.asurafanclub.frustrumculling.test",
+    "rootNamespace": "",
+    "references": [
+        "GUID:cd48bc2b6bc39b84b9b733ac40a36ccd",
+        "GUID:e9ee7bd8ecade3a408fcbc4e72320e0c"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

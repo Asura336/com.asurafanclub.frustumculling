@@ -1,0 +1,70 @@
+﻿#define THREAD_GROUP_SIZE_X 64
+#define THREAD_GROUP_SIZE_Y 1
+#define THREAD_GROUP_SIZE_Z 1
+#define DISPATCHTHREADID_TO_INDEX(id) (id.x)
+
+#pragma kernel Culling
+
+// type
+struct Bounds
+{
+    float3 center;
+    float3 extents;
+};
+
+// global cbuffer
+float4x4 vpMatrix;
+
+// readonly buffer
+StructuredBuffer<Bounds> inputBounds;
+
+// read write buffer
+RWStructuredBuffer<float> outputHeight;
+RWStructuredBuffer<uint> outputVisible;
+
+
+inline uint IsClipPosVisible(float4 clipPos)
+{
+    return (clipPos.z > clipPos.w
+    || clipPos.x < -clipPos.w
+    || clipPos.x > clipPos.w
+    || clipPos.y < -clipPos.w
+    || clipPos.y > clipPos.w)
+    ? 0 : 1;
+}
+
+[numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
+void Culling(uint3 id : SV_DispatchThreadID)
+{
+    uint index = DISPATCHTHREADID_TO_INDEX(id);
+
+    float3 center = inputBounds[index].center, extents = inputBounds[index].extents;
+    float3 bMin = center - extents, bMax = center + extents;
+    
+    float4 ps[8];
+    // world pos
+    ps[0] = float4(bMin.x, bMin.y, bMin.z, 1);
+    ps[1] = float4(bMin.x, bMin.y, bMax.z, 1);
+    ps[2] = float4(bMin.x, bMax.y, bMin.z, 1);
+    ps[3] = float4(bMin.x, bMax.y, bMax.z, 1);
+    ps[4] = float4(bMax.x, bMin.y, bMin.z, 1);
+    ps[5] = float4(bMax.x, bMin.y, bMax.z, 1);
+    ps[6] = float4(bMax.x, bMax.y, bMin.z, 1);
+    ps[7] = float4(bMax.x, bMax.y, bMax.z, 1);
+    
+    float maxY = bMin.y, minY = bMax.y;
+    uint visible = 0;
+    
+    [unroll]
+    for (int i = 0; i < 8; i++)
+    {
+        float4 psi = mul(vpMatrix, ps[i]);
+        visible += IsClipPosVisible(psi);
+        float temp_viewPosY = 0.5f + 0.5f * psi.y / psi.w;
+        maxY = max(maxY, temp_viewPosY);
+        minY = min(minY, temp_viewPosY);
+    }
+    
+    outputHeight[index] = maxY - minY;
+    outputVisible[index] = saturate(visible);
+}
