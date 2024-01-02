@@ -16,6 +16,9 @@ namespace Com.Culling
         Matrix4x4 LocalToWorld { get; }
         bool TransformStatic { get; set; }
 
+        internal unsafe void GetLocalBounds(Bounds* dst);
+        internal unsafe void GetLocalToWorld(Matrix4x4* dst);
+
         void DoBecameInvisible(Camera targetCamera);
         void DoBecameVisible(Camera targetCamera);
         void DoLodChanged(Camera targetCamera, IReadOnlyList<float> lodLevelValues, int level);
@@ -91,6 +94,17 @@ namespace Com.Culling
         public override string ToString()
         {
             return gameObject ? gameObject.name : base.ToString();
+        }
+
+        unsafe void IAABBCullingVolume.GetLocalToWorld(Matrix4x4* dst)
+        {
+            var t = cachedTransform ? cachedTransform : (cachedTransform = transform);
+            *dst = t ? t.localToWorldMatrix : Matrix4x4.identity;
+        }
+
+        unsafe void IAABBCullingVolume.GetLocalBounds(Bounds* dst)
+        {
+            *dst = localBounds;
         }
 
         public int Index

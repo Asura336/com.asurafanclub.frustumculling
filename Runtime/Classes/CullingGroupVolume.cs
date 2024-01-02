@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Burst;
 using UnityEngine;
 using UnityEngine.Events;
 using static Com.Culling.AABBCullingHelper;
@@ -8,6 +9,8 @@ namespace Com.Culling
     /// <summary>
     /// 附加在物体上，写入包围盒作为剔除代理体
     /// </summary>
+    [BurstCompile(CompileSynchronously = true,
+        FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     public class CullingGroupVolume : MonoBehaviour, IAABBCullingVolume
     {
         [SerializeField] bool transformStatic;
@@ -65,6 +68,37 @@ namespace Com.Culling
             onBecameInvisible.RemoveAllListeners();
             lodChanged.RemoveAllListeners();
             onVolumeDisabled.RemoveAllListeners();
+        }
+
+        unsafe void IAABBCullingVolume.GetLocalBounds(Bounds* dst)
+        {
+            *dst = localBounds;
+        }
+
+        unsafe void IAABBCullingVolume.GetLocalToWorld(Matrix4x4* dst)
+        {
+            *dst = destroyed ? Matrix4x4.identity : cachedTransform.localToWorldMatrix;
+        }
+
+        public void DoBecameInvisible(Camera targetCamera)
+        {
+            onBecameInvisible?.Invoke(targetCamera);
+        }
+
+        public void DoBecameVisible(Camera targetCamera)
+        {
+            onBecameVisible?.Invoke(targetCamera);
+        }
+
+        public void DoLodChanged(Camera targetCamera, IReadOnlyList<float> lodLevelValues, int level)
+        {
+            lodChanged?.Invoke(targetCamera, lodLevelValues, level);
+        }
+
+        [ContextMenu("update bounds")]
+        public void UpdateVolume()
+        {
+            volumeUpdated = true;
         }
 
         public int Index
@@ -131,27 +165,6 @@ namespace Com.Culling
                 localBounds.Mul(LocalToWorld, ref b);
                 return b;
             }
-        }
-
-        public void DoBecameInvisible(Camera targetCamera)
-        {
-            onBecameInvisible?.Invoke(targetCamera);
-        }
-
-        public void DoBecameVisible(Camera targetCamera)
-        {
-            onBecameVisible?.Invoke(targetCamera);
-        }
-
-        public void DoLodChanged(Camera targetCamera, IReadOnlyList<float> lodLevelValues, int level)
-        {
-            lodChanged?.Invoke(targetCamera, lodLevelValues, level);
-        }
-
-        [ContextMenu("update bounds")]
-        public void UpdateVolume()
-        {
-            volumeUpdated = true;
         }
     }
 }

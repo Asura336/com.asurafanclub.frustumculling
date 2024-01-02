@@ -84,7 +84,6 @@ namespace Com.Culling
 
         void OnDestroy()
         {
-            Instance = null;
             Release(ref instancesLocalToWorld);
             Release(ref instancesLocalBounds);
         }
@@ -103,12 +102,14 @@ namespace Com.Culling
             {
                 if (volumeInstances[i].VolumeUpdated)
                 {
-                    pLocalBounds[i] = volumeInstances[i].LocalBounds;
+                    //pLocalBounds[i] = volumeInstances[i].LocalBounds;
+                    volumeInstances[i].GetLocalBounds(pLocalBounds + i);
                     anyUpdated = true;
                 }
                 if (!volumeInstances[i].TransformStatic)
                 {
-                    pLocalToWorld[i] = volumeInstances[i].LocalToWorld;
+                    //pLocalToWorld[i] = volumeInstances[i].LocalToWorld;
+                    volumeInstances[i].GetLocalToWorld(pLocalToWorld + i);
                     anyUpdated = true;
                 }
             }
@@ -149,8 +150,8 @@ namespace Com.Culling
             }
             volumeInstances.Add(volume);
             bounds[addIndex] = volume.Volume;
-            ((Matrix4x4*)instancesLocalToWorld.GetUnsafePtr())[addIndex] = volume.LocalToWorld;
-            ((Bounds*)instancesLocalBounds.GetUnsafePtr())[addIndex] = volume.LocalBounds;
+            volume.GetLocalToWorld((Matrix4x4*)instancesLocalToWorld.GetUnsafePtr() + addIndex);
+            volume.GetLocalBounds((Bounds*)instancesLocalBounds.GetUnsafePtr() + addIndex);
             volume.Index = addIndex;
 
             count++;
@@ -165,6 +166,7 @@ namespace Com.Culling
                 throw new ArgumentNullException("volume is Nothing");
             }
             if (!volume.Valid) { return; }
+            if (volumeInstances.Count == 0) { return; }
 
             int removeIndex = volume.Index;
             if (!ReferenceEquals(volume, volumeInstances[removeIndex]))
