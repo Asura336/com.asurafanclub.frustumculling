@@ -11,6 +11,7 @@ namespace Com.Culling
     /// </summary>
     [BurstCompile(CompileSynchronously = true,
         FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
+    [AddComponentMenu("Com/Culling/CullingGroupVolume")]
     public class CullingGroupVolume : MonoBehaviour, IAABBCullingVolume
     {
         [SerializeField] bool transformStatic;

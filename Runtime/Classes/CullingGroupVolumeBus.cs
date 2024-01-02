@@ -33,6 +33,7 @@ namespace Com.Culling
         NativeList<Matrix4x4> instancesLocalToWorld;
         NativeList<Bounds> instancesLocalBounds;
 
+        bool destroyed = false;
 
         bool m_pauseUpdate = false;
         bool PauseUpdate
@@ -84,14 +85,14 @@ namespace Com.Culling
 
         void OnDestroy()
         {
+            destroyed = true;
             Release(ref instancesLocalToWorld);
             Release(ref instancesLocalBounds);
         }
 
         unsafe void LateUpdate()
         {
-            if (PauseUpdate) { return; }
-            if (count == 0) { return; }
+            if (PauseUpdate || count == 0 || destroyed) { return; }
 
             const int updateSample = 3;
             int start = Time.frameCount % updateSample;
@@ -134,6 +135,7 @@ namespace Com.Culling
 
         public unsafe void Add(IAABBCullingVolume volume)
         {
+            if (destroyed) { return; }
             if (volume == null)
             {
                 throw new ArgumentNullException("volume is Nothing");
@@ -161,6 +163,7 @@ namespace Com.Culling
 
         public void Remove(IAABBCullingVolume volume)
         {
+            if (destroyed) { return; }
             if (volume == null)
             {
                 throw new ArgumentNullException("volume is Nothing");

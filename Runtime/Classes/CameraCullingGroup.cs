@@ -8,6 +8,8 @@ namespace Com.Culling
     /// 附加在相机上，持有一个剔除组
     /// </summary>
     [RequireComponent(typeof(Camera))]
+    [DisallowMultipleComponent]
+    [AddComponentMenu("Com/Culling/CameraCullingGroup")]
     public class CameraCullingGroup : MonoBehaviour
     {
         [Header("Set in prefab")]
