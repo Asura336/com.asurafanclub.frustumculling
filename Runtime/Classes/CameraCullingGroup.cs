@@ -45,6 +45,7 @@ namespace Com.Culling
             RenderPipelineManager.beginContextRendering += RenderPipelineManager_beginContextRendering;
 
             frameState = CullingGroupFrameState.DoCull;
+            Apply();
         }
 
         protected virtual void OnDisable()

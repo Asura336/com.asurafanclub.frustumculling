@@ -25,6 +25,13 @@ namespace Com.Culling
     /// </summary>
     public abstract class AbsAABBCullingGroupKeeper : MonoBehaviour, IAABBCullingGroupKeeper
     {
+        protected enum CullingGroupFrameState
+        {
+            Common = 0,
+            DoCull,
+            CheckEventOnly,
+        }
+
         public const int defaultBufferLength = 1023;
 
         public Camera referenceCamera;
@@ -35,7 +42,7 @@ namespace Com.Culling
         [Header("Debug and readonly")]
         [SerializeField] protected List<IAABBCullingVolume> volumeInstances;
         protected NativeList<Matrix4x4> instancesLocalToWorld;
-        protected bool anyModify;
+        CullingGroupFrameState frameState = 0;
 
         protected bool hasInit = false;
         protected List<IAABBCullingVolume> addVolumeInstancesBuffer = new List<IAABBCullingVolume>(512);
@@ -76,12 +83,13 @@ namespace Com.Culling
         protected virtual void OnEnable()
         {
             cullingGroup.ReferenceCamera = referenceCamera;
+            cullingGroup.InitInternalBuffers(cullingGroup.Count);
+            cullingGroup.SetLodLevels(lodLevels);
         }
 
         protected virtual void OnDisable()
         {
             cullingGroup.InitInternalBuffers(cullingGroup.Count);
-            cullingGroup.CheckEvent();
         }
 
         protected virtual void OnDestroy()
@@ -100,11 +108,6 @@ namespace Com.Culling
 
         protected virtual unsafe void LateUpdate()
         {
-            if (anyModify)
-            {
-                cullingGroup.InitInternalBuffers(cullingGroup.Count);
-                anyModify = false;
-            }
             if (volumeInstances != null)
             {
                 int count = volumeInstances.Count;
@@ -121,7 +124,19 @@ namespace Com.Culling
                 }
             }
 
-            cullingGroup.Update();
+            switch (frameState)
+            {
+                case CullingGroupFrameState.CheckEventOnly:
+                    cullingGroup.CheckEvent();
+                    break;
+                case CullingGroupFrameState.DoCull:
+                    cullingGroup.Cull();
+                    break;
+                default:
+                    cullingGroup.Update();
+                    break;
+            }
+            frameState = 0;
         }
 
         public virtual void Add(IAABBCullingVolume volume)
@@ -155,7 +170,11 @@ namespace Com.Culling
             int lastIndex = currentCount - 1;
             bounds[lastIndex] = volume.Volume;
             volume.Index = lastIndex;
-            anyModify = true;
+
+            cullingGroup.GetCurrentBuffer(out var prev, out var curr);
+            prev[lastIndex] = AABBCullingContext.Visible;
+            curr[lastIndex] = AABBCullingContext.Visible;
+            frameState = CullingGroupFrameState.CheckEventOnly;
         }
 
         public virtual unsafe void Remove(IAABBCullingVolume volume)

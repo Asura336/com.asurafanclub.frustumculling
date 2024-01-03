@@ -108,7 +108,7 @@ namespace Com.Culling
                     return i;
                 }
             }
-            return len;
+            return len - 1;
         }
 
         [BurstCompile]

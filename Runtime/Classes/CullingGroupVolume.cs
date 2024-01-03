@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using Unity.Burst;
 using UnityEngine;
 using UnityEngine.Events;
@@ -7,7 +7,7 @@ using static Com.Culling.AABBCullingHelper;
 namespace Com.Culling
 {
     /// <summary>
-    /// ¸½¼ÓÔÚÎïÌåÉÏ£¬Ğ´Èë°üÎ§ºĞ×÷ÎªÌŞ³ı´úÀíÌå
+    /// é™„åŠ åœ¨ç‰©ä½“ä¸Šï¼Œå†™å…¥åŒ…å›´ç›’ä½œä¸ºå‰”é™¤ä»£ç†ä½“
     /// </summary>
     [BurstCompile(CompileSynchronously = true,
         FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
@@ -142,7 +142,7 @@ namespace Com.Culling
         }
 
         /// <summary>
-        /// ±¾µØ¿Õ¼äÏÂµÄÖá¶ÔÆë°üÎ§ºĞ
+        /// æœ¬åœ°ç©ºé—´ä¸‹çš„è½´å¯¹é½åŒ…å›´ç›’
         /// </summary>
         public Bounds LocalBounds
         {
@@ -168,7 +168,7 @@ namespace Com.Culling
         public bool TransformStatic { get => transformStatic; set => transformStatic = value; }
 
         /// <summary>
-        /// µ±Ç°ÊÀ½ç¿Õ¼äÏÂµÄÖá¶ÔÆë°üÎ§ºĞ
+        /// å½“å‰ä¸–ç•Œç©ºé—´ä¸‹çš„è½´å¯¹é½åŒ…å›´ç›’
         /// </summary>
         public Bounds Volume
         {
