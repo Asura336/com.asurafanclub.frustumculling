@@ -12,11 +12,20 @@ namespace Com.Culling
     [AddComponentMenu("Com/Culling/CameraCullingGroup")]
     public class CameraCullingGroup : MonoBehaviour
     {
+        enum CullingGroupFrameState
+        {
+            Common = 0,
+            DoCull,
+            CheckEventOnly,
+        }
+
         [Header("Set in prefab")]
         [SerializeField] protected float[] lodLevels;
 
         Camera targetCamera;
         AbsAABBCullingGroup cullingGroup;
+
+        CullingGroupFrameState frameState = 0;
 
         protected virtual void Awake()
         {
@@ -34,6 +43,8 @@ namespace Com.Culling
             CullingGroupVolumeBus.OnAddVolume += CullingGroupVolumeBus_OnAddVolume;
             CullingGroupVolumeBus.OnRemoveVolume += CullingGroupVolumeBus_OnRemoveVolume;
             RenderPipelineManager.beginContextRendering += RenderPipelineManager_beginContextRendering;
+
+            frameState = CullingGroupFrameState.DoCull;
         }
 
         protected virtual void OnDisable()
@@ -43,7 +54,6 @@ namespace Com.Culling
             RenderPipelineManager.beginContextRendering -= RenderPipelineManager_beginContextRendering;
 
             cullingGroup.InitInternalBuffers(cullingGroup.Count);
-            cullingGroup.CheckEvent();
         }
 
         protected virtual void OnDestroy()
@@ -55,6 +65,10 @@ namespace Com.Culling
         {
             cullingGroup.Setup(bus.BoundsRef);
             cullingGroup.Count = bus.Count;
+            cullingGroup.GetCurrentBuffer(out var prev, out var curr);
+            prev[index] = AABBCullingContext.Visible;
+            curr[index] = AABBCullingContext.Visible;
+            frameState = CullingGroupFrameState.CheckEventOnly;
         }
 
         private void CullingGroupVolumeBus_OnRemoveVolume(CullingGroupVolumeBus bus, int index)
@@ -66,7 +80,19 @@ namespace Com.Culling
         {
             if (cullingGroup != null && cullingGroup.Count != 0)
             {
-                cullingGroup.Update();
+                switch (frameState)
+                {
+                    case CullingGroupFrameState.DoCull:
+                        cullingGroup.Cull();
+                        break;
+                    case CullingGroupFrameState.CheckEventOnly:
+                        cullingGroup.CheckEvent();
+                        break;
+                    default:
+                        cullingGroup.Update();
+                        break;
+                }
+                frameState = 0;
             }
         }
 

@@ -9,14 +9,53 @@ namespace Com.Culling
     /// </summary>
     public interface IAABBCullingGroup
     {
+        /// <summary>
+        /// 剔除组目前参与剔除的实例数目
+        /// </summary>
         int Count { get; set; }
+        /// <summary>
+        /// 剔除组的目标相机
+        /// </summary>
         Camera ReferenceCamera { get; set; }
 
+        /// <summary>
+        /// 擦除一条数据，会减少 <see cref="Count"/>
+        /// </summary>
+        /// <param name="index"></param>
         void EraseAt(int index);
+        /// <summary>
+        /// 传递 LOD 距离，按倒序排列的视口高度
+        /// </summary>
+        /// <param name="lodLevels"></param>
         void SetLodLevels(float[] lodLevels);
+        /// <summary>
+        /// 传递包围盒数组作为所有实例的信息，剔除组会引用此数组。不会改变 <see cref="Count"/>
+        /// </summary>
+        /// <param name="array"></param>
         void Setup(Bounds[] array);
+        /// <summary>
+        /// 写入 <see cref="Count"/> 并初始化内部缓冲区，会立即检查一次可见性（认为所有实例都变为可见的）
+        /// </summary>
+        /// <param name="count"></param>
         void InitInternalBuffers(int count);
+        /// <summary>
+        /// 步进一次，会更新<see cref="ReferenceCamera">目标相机</see>的 VP 矩阵并检查可见性，分发事件，滚动缓冲区
+        /// </summary>
         void Update();
+        /// <summary>
+        /// 获取内部缓冲区，在剔除组每次<see cref="Update">步进</see>后两条缓冲区会交换，不必保存它们的引用
+        /// </summary>
+        /// <param name="prev"></param>
+        /// <param name="curr"></param>
+        void GetCurrentBuffer(out AABBCullingContext[] prev, out AABBCullingContext[] curr);
+        /// <summary>
+        /// 立即更新<see cref="ReferenceCamera">目标相机</see>的 VP 矩阵并检查可见性，分发事件
+        /// </summary>
+        void Cull();
+        /// <summary>
+        /// 按照当前缓冲区内容指示的可见性分发可见性变更的事件
+        /// </summary>
+        void CheckEvent();
     }
 
     /// <summary>
@@ -33,6 +72,8 @@ namespace Com.Culling
         public abstract void SetLodLevels(float[] lodLevels);
         public abstract void Setup(Bounds[] array);
         public abstract void InitInternalBuffers(int count);
+        public abstract void GetCurrentBuffer(out AABBCullingContext[] prev, out AABBCullingContext[] curr);
+        public abstract void Cull();
         public abstract void CheckEvent();
         public abstract AABBCullingContext GetInternalVisibleContextAt(int index);
         public abstract void Update();
@@ -117,14 +158,22 @@ namespace Com.Culling
             //    after = rev ? ctx1 : ctx0;
             // ctx0 => after
             // ctx1 => before
-            revertCtxBufferFrame = 1;
+            revertCtxBufferFrame = 0;
+            GetCurrentBuffer(out var prev, out var curr);
             for (int i = 0; i < count; i++)
             {
-                ctx0[i] = AABBCullingContext.Invisible;
-                ctx1[i] = AABBCullingContext.Visible;
+                prev[i] = AABBCullingContext.Invisible;
+                curr[i] = AABBCullingContext.Visible;
             }
             // 立即检查一次事件？
-            CheckEvent(ctx1, ctx0, bufferCount);
+            CheckEvent(prev, curr, bufferCount);
+        }
+
+        public override void GetCurrentBuffer(out AABBCullingContext[] prev, out AABBCullingContext[] curr)
+        {
+            bool rev = revertCtxBufferFrame % 2 != 0;
+            prev = rev ? ctx0 : ctx1;
+            curr = rev ? ctx1 : ctx0;
         }
 
         public override void SetLodLevels(float[] lodLevels)
@@ -160,15 +209,26 @@ namespace Com.Culling
         public override void Update()
         {
             UpdateMatrix();
+            GetCurrentBuffer(out var prev, out var curr);
+            Culling(curr, bounds, bufferCount);
+            CheckEvent(prev, curr, bufferCount);
+            unchecked
+            {
+                revertCtxBufferFrame++;
+            }
+        }
 
-            bool rev = revertCtxBufferFrame % 2 != 0;
-            AABBCullingContext[] before = rev ? ctx0 : ctx1,
-                after = rev ? ctx1 : ctx0;
-
-            Culling(after, bounds, bufferCount);
-            CheckEvent(before, after, bufferCount);
-
-            revertCtxBufferFrame++;
+        public override void Cull()
+        {
+            GetCurrentBuffer(out var prev, out var curr);
+            for (int i = 0; i < bufferCount; i++)
+            {
+                prev[i] = AABBCullingContext.Visible;
+                curr[i] = AABBCullingContext.Visible;
+            }
+            UpdateMatrix();
+            Culling(curr, bounds, bufferCount);
+            CheckEvent(prev, curr, bufferCount);
         }
 
         /// <summary>
@@ -176,9 +236,7 @@ namespace Com.Culling
         /// </summary>
         public override void CheckEvent()
         {
-            bool rev = revertCtxBufferFrame % 2 != 0;
-            AABBCullingContext[] before = rev ? ctx0 : ctx1,
-                after = rev ? ctx1 : ctx0;
+            GetCurrentBuffer(out var before, out var after);
             CheckEvent(before, after, bufferCount);
         }
 

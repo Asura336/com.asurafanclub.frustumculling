@@ -62,8 +62,10 @@ namespace Com.Culling
 
             const int groupSizeX = 64;
             int threadNumberX = count / groupSizeX + (count % groupSizeX != 0 ? 1 : 0);
-            cullingCs.Dispatch(kernel_Culling, threadNumberX, 1, 1);
-
+            if (threadNumberX != 0)
+            {
+                cullingCs.Dispatch(kernel_Culling, threadNumberX, 1, 1);
+            }
             /* 计算着色器很高效，但性能亏在读取回传数据上
              * 主要开销在这个 GetData 上
              * 

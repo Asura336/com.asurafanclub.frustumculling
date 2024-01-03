@@ -25,6 +25,7 @@ namespace Com.Culling
 
         bool volumeUpdated;
         Transform cachedTransform;
+        Matrix4x4 cachedLocalToWorld;
         bool destroyed = false;
         bool selfEnabled = false;
 
@@ -52,6 +53,7 @@ namespace Com.Culling
         void OnEnable()
         {
             selfEnabled = true;
+            cachedLocalToWorld = cachedTransform.localToWorldMatrix;
             CullingGroupVolumeBus.Instance.Add(this);
         }
 
@@ -78,7 +80,22 @@ namespace Com.Culling
 
         unsafe void IAABBCullingVolume.GetLocalToWorld(Matrix4x4* dst)
         {
-            *dst = destroyed ? Matrix4x4.identity : cachedTransform.localToWorldMatrix;
+            // 667 times, 1.24 ms
+            // 2001 times, 3.56 ms
+            //*dst = destroyed ? Matrix4x4.identity : cachedTransform.localToWorldMatrix;
+
+            // 667 times, 1.23 ms
+            // 2001 times, 3.51 ms
+            if (!transformStatic)
+            {
+                cachedLocalToWorld = cachedTransform.localToWorldMatrix;
+            }
+            CopyMatrix(cachedLocalToWorld, ref *dst);
+        }
+        [BurstCompile]
+        static void CopyMatrix(in Matrix4x4 src, ref Matrix4x4 dst)
+        {
+            dst = src;
         }
 
         public void DoBecameInvisible(Camera targetCamera)
@@ -144,14 +161,9 @@ namespace Com.Culling
             }
         }
 
-        public Matrix4x4 LocalToWorld
-        {
-            get
-            {
-                var t = cachedTransform ? cachedTransform : (cachedTransform = transform);
-                return t ? t.localToWorldMatrix : Matrix4x4.identity;
-            }
-        }
+        public Matrix4x4 LocalToWorld => transformStatic
+            ? cachedLocalToWorld
+            : cachedLocalToWorld = cachedTransform.localToWorldMatrix;
 
         public bool TransformStatic { get => transformStatic; set => transformStatic = value; }
 

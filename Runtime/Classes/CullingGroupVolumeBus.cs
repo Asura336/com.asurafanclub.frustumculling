@@ -26,6 +26,7 @@ namespace Com.Culling
     internal class CullingGroupVolumeBus : MonoBehaviour, ICullingGroupVolumeBus
     {
         public const int defaultBufferLength = 1024;
+        const int updateSample = 7;
 
         int count = 0;
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
@@ -34,6 +35,8 @@ namespace Com.Culling
         NativeList<Bounds> instancesLocalBounds;
 
         bool destroyed = false;
+
+        bool anyUpdated = false;
 
         bool m_pauseUpdate = false;
         bool PauseUpdate
@@ -94,11 +97,9 @@ namespace Com.Culling
         {
             if (PauseUpdate || count == 0 || destroyed) { return; }
 
-            const int updateSample = 3;
             int start = Time.frameCount % updateSample;
             var pLocalToWorld = (Matrix4x4*)instancesLocalToWorld.GetUnsafePtr();
             var pLocalBounds = (Bounds*)instancesLocalBounds.GetUnsafePtr();
-            bool anyUpdated = false;
             for (int i = start; i < count; i += updateSample)
             {
                 if (volumeInstances[i].VolumeUpdated)
@@ -130,6 +131,8 @@ namespace Com.Culling
                 {
                     UnsafeUtility.MemCpy(pBounds, volumes.GetUnsafePtr(), count * sizeof(Bounds));
                 }
+
+                anyUpdated = false;
             }
         }
 
@@ -157,6 +160,7 @@ namespace Com.Culling
             volume.Index = addIndex;
 
             count++;
+            anyUpdated = true;
 
             OnAddVolume?.Invoke(this, addIndex);
         }

@@ -9,9 +9,10 @@ namespace Com.Culling.Test
         SimpleAABBCullingGroup cullingGroup;
         GameObject[] cubes;
         Renderer[] renderers;
+        Material[] materials;
 
         [SerializeField] float[] lodLevels = new float[] { 0.75f, 0.5f, 0.33f, 0.15f };
-        [SerializeField] Color[] lodColors = new Color[] { Color.white, Color.gray, Color.green, Color.red };
+        [SerializeField] Color[] lodColors = new Color[] { Color.white, Color.gray, Color.green, Color.red, Color.black };
 
         private void Start()
         {
@@ -38,6 +39,10 @@ namespace Com.Culling.Test
         private void OnDestroy()
         {
             cullingGroup.onStateChanged = null;
+            foreach (var mat in materials)
+            {
+                Destroy(mat);
+            }
         }
 
         private void Update()
@@ -48,11 +53,13 @@ namespace Com.Culling.Test
         void InitCubes()
         {
             const int X = 20, Y = 5, Z = 20;
+            const int length = X * Y * Z;
 
-            cubes = new GameObject[X * Y * Z];
-            renderers = new Renderer[X * Y * Z];
-            Vector3 start = new Vector3(0, 0, 0);
-            Vector3 offset = new Vector3(2, 1, 2);
+            cubes = new GameObject[length];
+            renderers = new Renderer[length];
+            materials = new Material[length];
+            var start = new Vector3(0, 0, 0);
+            var offset = new Vector3(2, 1, 2);
             int index = 0;
             for (int x = 0; x < X; x++)
             {
@@ -67,7 +74,7 @@ namespace Com.Culling.Test
                         cubes[index] = o;
 
                         renderers[index] = o.GetComponent<Renderer>();
-
+                        materials[index] = renderers[index].material;
                         index++;
                     }
                 }
@@ -87,7 +94,7 @@ namespace Com.Culling.Test
             }
             if (eventContext.CurrentLodLevel != eventContext.PreviousLodLevel)
             {
-                renderers[index].material.color = lodColors[eventContext.CurrentLodLevel];
+                materials[index].color = lodColors[eventContext.CurrentLodLevel];
             }
         }
     }
