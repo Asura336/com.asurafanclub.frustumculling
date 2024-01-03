@@ -10,7 +10,7 @@ namespace Com.Culling
     [RequireComponent(typeof(Camera))]
     [DisallowMultipleComponent]
     [AddComponentMenu("Com/Culling/CameraCullingGroup")]
-    public class CameraCullingGroup : MonoBehaviour
+    public sealed class CameraCullingGroup : MonoBehaviour
     {
         enum CullingGroupFrameState
         {
@@ -19,15 +19,15 @@ namespace Com.Culling
             CheckEventOnly,
         }
 
-        [Header("Set in prefab")]
-        [SerializeField] protected float[] lodLevels;
+        [Header("Fix it in prefab")]
+        [SerializeField] float[] lodLevels;
 
         Camera targetCamera;
         AbsAABBCullingGroup cullingGroup;
 
         CullingGroupFrameState frameState = 0;
 
-        protected virtual void Awake()
+        private void Awake()
         {
             targetCamera = GetComponent<Camera>();
             cullingGroup = new JobsAABBCullingGroup
@@ -38,17 +38,17 @@ namespace Com.Culling
             cullingGroup.onStateChanged = CullingGroup_onStateChanged;
         }
 
-        protected virtual void OnEnable()
+        private void OnEnable()
         {
             CullingGroupVolumeBus.OnAddVolume += CullingGroupVolumeBus_OnAddVolume;
             CullingGroupVolumeBus.OnRemoveVolume += CullingGroupVolumeBus_OnRemoveVolume;
             RenderPipelineManager.beginContextRendering += RenderPipelineManager_beginContextRendering;
 
             frameState = CullingGroupFrameState.DoCull;
-            Apply();
+            cullingGroup.SetLodLevels(lodLevels);
         }
 
-        protected virtual void OnDisable()
+        private void OnDisable()
         {
             CullingGroupVolumeBus.OnAddVolume -= CullingGroupVolumeBus_OnAddVolume;
             CullingGroupVolumeBus.OnRemoveVolume -= CullingGroupVolumeBus_OnRemoveVolume;
@@ -57,7 +57,7 @@ namespace Com.Culling
             cullingGroup.InitInternalBuffers(cullingGroup.Count);
         }
 
-        protected virtual void OnDestroy()
+        private void OnDestroy()
         {
             cullingGroup.onStateChanged = null;
         }
@@ -97,13 +97,26 @@ namespace Com.Culling
             }
         }
 
-        [ContextMenu("apply lod levels")]
-        public void Apply()
+        public void SetLODLevels(float[] lodLevels)
         {
-            cullingGroup.SetLodLevels(lodLevels);
+            this.lodLevels = lodLevels;
+            cullingGroup?.SetLodLevels(lodLevels);
         }
 
-        protected virtual void CullingGroup_onStateChanged(AABBCullingGroupEvent eventContext)
+        [ContextMenu("apply lod levels")]
+        void Apply()
+        {
+            if (Application.isPlaying)
+            {
+                cullingGroup.SetLodLevels(lodLevels);
+            }
+            else
+            {
+                Debug.Log("在播放时调用此方法应用更改的 LOD 层级");
+            }
+        }
+
+        private void CullingGroup_onStateChanged(AABBCullingGroupEvent eventContext)
         {
             int index = eventContext.index;
             var volumes = CullingGroupVolumeBus.Instance.VolumesRef;
