@@ -60,6 +60,7 @@ namespace Com.Culling
         void OnDisable()
         {
             selfEnabled = false;
+            onVolumeDisabled?.Invoke();
             CullingGroupVolumeBus.Instance.Remove(this);
         }
 
