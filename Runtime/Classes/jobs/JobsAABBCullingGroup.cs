@@ -202,8 +202,8 @@ namespace Com.Culling
                 byte prevState = (byte)(HeightToLodLevel(prevCtxs[index].height) & AABBCullingGroupEvent.lodLevelMask);
                 byte currState = (byte)(HeightToLodLevel(currCtxs[index].height) & AABBCullingGroupEvent.lodLevelMask);
 
-                if (!prevCtxs[index].visible && currCtxs[index].visible) { currState |= AABBCullingGroupEvent.visibleMask; }
-                if (prevCtxs[index].visible && !currCtxs[index].visible) { prevState |= AABBCullingGroupEvent.visibleMask; }
+                if (!prevCtxs[index].visible && currCtxs[index].visible) { currState |= AABBCullingGroupEvent.visibleFlag; }
+                if (prevCtxs[index].visible && !currCtxs[index].visible) { prevState |= AABBCullingGroupEvent.visibleFlag; }
 
                 prevStates[index] = prevState;
                 currStates[index] = currState;
