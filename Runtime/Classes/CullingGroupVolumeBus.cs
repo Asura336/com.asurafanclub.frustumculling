@@ -7,6 +7,7 @@ using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
+using UnityEngine.Jobs;
 
 namespace Com.Culling
 {
@@ -31,6 +32,7 @@ namespace Com.Culling
         int count = 0;
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
         Bounds[] bounds;
+        TransformAccessArray instanceTransforms;
         NativeList<Matrix4x4> instancesLocalToWorld;
         NativeList<Bounds> instancesLocalBounds;
 
@@ -91,14 +93,29 @@ namespace Com.Culling
             destroyed = true;
             Release(ref instancesLocalToWorld);
             Release(ref instancesLocalBounds);
+            Release(ref instanceTransforms);
         }
 
         unsafe void LateUpdate()
         {
             if (PauseUpdate || count == 0 || destroyed) { return; }
 
+            // 同步变换矩阵
+            // 0.02 ms
+            var _anyDirty = new NativeArray<bool>(1, Allocator.TempJob);
+            new GetInsancesLocalToWorldFor
+            {
+                length = count,
+                dstLocalToWorlds = instancesLocalToWorld.AsArray().Reinterpret<float4x4>(),
+                anyUpdated = _anyDirty,
+            }.ScheduleReadOnly(instanceTransforms, 128).Complete();
+
+            anyUpdated |= *(bool*)_anyDirty.GetUnsafePtr();
+            _anyDirty.Dispose();
+
+            // 优化前从托管对象读取 localToWorldMatrix
             int start = Time.frameCount % updateSample;
-            var pLocalToWorld = (Matrix4x4*)instancesLocalToWorld.GetUnsafePtr();
+            //var pLocalToWorld = (Matrix4x4*)instancesLocalToWorld.GetUnsafePtr();
             var pLocalBounds = (Bounds*)instancesLocalBounds.GetUnsafePtr();
             for (int i = start; i < count; i += updateSample)
             {
@@ -108,12 +125,11 @@ namespace Com.Culling
                     volumeInstances[i].GetLocalBounds(pLocalBounds + i);
                     anyUpdated = true;
                 }
-                if (!volumeInstances[i].TransformStatic)
-                {
-                    //pLocalToWorld[i] = volumeInstances[i].LocalToWorld;
-                    volumeInstances[i].GetLocalToWorld(pLocalToWorld + i);
-                    anyUpdated = true;
-                }
+
+                // 285 times, 0.54 ms
+                ////pLocalToWorld[i] = volumeInstances[i].LocalToWorld;
+                //volumeInstances[i].GetLocalToWorld(pLocalToWorld + i);
+                //anyUpdated = true;
             }
             if (anyUpdated)
             {
@@ -151,9 +167,12 @@ namespace Com.Culling
                 int newLength = Mathf.Max(defaultBufferLength, count * 2);
                 Realloc(ref instancesLocalToWorld, newLength);
                 Realloc(ref instancesLocalBounds, newLength);
+                Realloc(ref instanceTransforms, newLength);
                 AABBCullingHelper.Realloc(ref bounds, newLength);
             }
             volumeInstances.Add(volume);
+            instanceTransforms.Add(volume.transform);
+            Assert.AreEqual(instanceTransforms.length, count + 1);
             bounds[addIndex] = volume.Volume;
             volume.GetLocalToWorld((Matrix4x4*)instancesLocalToWorld.GetUnsafePtr() + addIndex);
             volume.GetLocalBounds((Bounds*)instancesLocalBounds.GetUnsafePtr() + addIndex);
@@ -191,6 +210,7 @@ namespace Com.Culling
             volumeInstances[removeIndex] = volumeInstances[lastIndex];
             volumeInstances[removeIndex].Index = removeIndex;
             volumeInstances.RemoveAt(lastIndex);
+            instanceTransforms.RemoveAtSwapBack(removeIndex);
             instancesLocalToWorld.RemoveAtSwapBack(removeIndex);
             instancesLocalBounds.RemoveAtSwapBack(removeIndex);
             if (lastIndex == 0)
@@ -245,12 +265,35 @@ Finally:
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Realloc(ref TransformAccessArray transformAccessArray, int size)
+        {
+            if (transformAccessArray.isCreated)
+            {
+                transformAccessArray.capacity = size;
+            }
+            else
+            {
+                TransformAccessArray.Allocate(size, -1, out transformAccessArray);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static unsafe void Release<T>(ref NativeList<T> nativeList) where T : unmanaged
         {
             if (nativeList.IsCreated)
             {
                 nativeList.Dispose();
                 nativeList = default;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void Release(ref TransformAccessArray array)
+        {
+            if (array.isCreated)
+            {
+                array.Dispose();
+                array = default;
             }
         }
     }

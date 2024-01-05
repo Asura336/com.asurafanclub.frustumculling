@@ -2,10 +2,12 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
+using Unity.Burst.CompilerServices;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Jobs;
 using static Com.Culling.AABBCullingHelper;
 
 namespace Com.Culling
@@ -261,6 +263,33 @@ namespace Com.Culling
             var worldExtents = (worldMax - worldMin) * 0.5f;
             var worldCenter = worldMin + extents;
             outputWorldBounds[index] = math.float3x2(worldCenter, worldExtents);
+        }
+    }
+
+    [BurstCompile(FloatPrecision = FloatPrecision.Standard,
+        FloatMode = FloatMode.Fast, CompileSynchronously = true)]
+    public struct GetInsancesLocalToWorldFor : IJobParallelForTransform
+    {
+        public int length;
+        public NativeArray<float4x4> dstLocalToWorlds;
+
+        [WriteOnly]
+        [NativeDisableParallelForRestriction]
+        public NativeArray<bool> anyUpdated;
+
+        public unsafe void Execute(int index, TransformAccess transform)
+        {
+            if (Hint.Likely(index < length))
+            {
+                var currLocalToWorld = transform.localToWorldMatrix;
+                var currLocalToWorld4x4 = *(float4x4*)&currLocalToWorld;
+
+                if (!currLocalToWorld4x4.Equals(dstLocalToWorlds[index]))
+                {
+                    dstLocalToWorlds[index] = currLocalToWorld4x4;
+                    anyUpdated[0] = true;
+                }
+            }
         }
     }
 }

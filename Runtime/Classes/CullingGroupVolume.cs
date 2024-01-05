@@ -120,7 +120,7 @@ namespace Com.Culling
             volumeUpdated = true;
         }
 
-        public int Index
+        int IAABBCullingVolume.Index
         {
             get => index;
             set => index = value;

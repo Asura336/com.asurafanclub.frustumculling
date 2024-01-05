@@ -6,15 +6,32 @@ using UnityEngine.Events;
 
 namespace Com.Culling
 {
+    /// <summary>
+    /// 标记被剔除的物体。实现应该继承 <see cref="AABBCullingGroupKeeperTemplate{TGroup, TVolume}"/>
+    /// </summary>
     public interface IAABBCullingVolume
     {
-        int Index { get; set; }
+        /// <summary>
+        /// 在管理器中的索引，不可持久化
+        /// </summary>
+        int Index { get; internal set; }
+        /// <summary>
+        /// <see cref="Index">索引</see>是有意义的值，表示此实例在管理器的缓冲区内
+        /// </summary>
         bool Valid { get; }
+        /// <summary>
+        /// 本地包围盒，持有此实例的对象需要更新这个值。
+        /// </summary>
         Bounds LocalBounds { get; set; }
+        /// <summary>
+        /// 立即计算此实例在世界空间下的包围盒
+        /// </summary>
         Bounds Volume { get; }
         internal bool VolumeUpdated { get; }
         Matrix4x4 LocalToWorld { get; }
-        bool TransformStatic { get; set; }
+#pragma warning disable IDE1006 // 命名样式
+        Transform transform { get; }
+#pragma warning restore IDE1006 // 命名样式
 
         internal unsafe void GetLocalBounds(Bounds* dst);
         internal unsafe void GetLocalToWorld(Matrix4x4* dst);
@@ -107,7 +124,7 @@ namespace Com.Culling
             *dst = localBounds;
         }
 
-        public int Index
+        int IAABBCullingVolume.Index
         {
             get => index;
             set => index = value;
@@ -138,8 +155,6 @@ namespace Com.Culling
                 return t ? t.localToWorldMatrix : Matrix4x4.identity;
             }
         }
-
-        public bool TransformStatic { get; set; } = false;
 
         public void GetHeightAndVisible(out float height, out bool visible)
         {
