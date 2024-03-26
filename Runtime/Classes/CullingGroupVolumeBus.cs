@@ -162,7 +162,7 @@ namespace Com.Culling
             PauseUpdate = true;
 
             int addIndex = count;
-            if (addIndex + 1 > count)
+            if (addIndex + 1 > volumeInstances.Count)
             {
                 int newLength = Mathf.Max(defaultBufferLength, count * 2);
                 Realloc(ref instancesLocalToWorld, newLength);
@@ -218,6 +218,7 @@ namespace Com.Culling
                 Assert.IsTrue(volumeInstances.Count == 0, "ins not empty");
             }
 
+            count--;
             OnRemoveVolume?.Invoke(this, removeIndex);
 Finally:
             volume.Index = -1;
