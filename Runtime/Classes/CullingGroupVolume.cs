@@ -36,10 +36,12 @@ namespace Com.Culling
             onBecameInvisible ??= new UnityEvent<Camera>();
             onVolumeDisabled ??= new UnityEvent();
             lodChanged ??= new UnityEvent<Camera, IReadOnlyList<float>, int>();
-
-            CullingGroupVolumeBus.OnSetup += CullingGroupVolumeBus_OnSetup;
-
             index = -1;
+        }
+
+        void Start()
+        {
+            CullingGroupVolumeBus.OnSetup += CullingGroupVolumeBus_OnSetup;
         }
 
         private void CullingGroupVolumeBus_OnSetup(CullingGroupVolumeBus obj)
@@ -54,13 +56,17 @@ namespace Com.Culling
         {
             selfEnabled = true;
             cachedLocalToWorld = cachedTransform.localToWorldMatrix;
-            CullingGroupVolumeBus.Instance.Add(this);
+            if (index == -1)
+            {
+                CullingGroupVolumeBus.Instance.Add(this);
+            }
         }
 
         void OnDisable()
         {
             selfEnabled = false;
             onVolumeDisabled?.Invoke();
+            //Debug.Log($"remove: {gameObject.name}({index})");
             CullingGroupVolumeBus.Instance.Remove(this);
         }
 
@@ -123,7 +129,11 @@ namespace Com.Culling
         int IAABBCullingVolume.Index
         {
             get => index;
-            set => index = value;
+            set
+            {
+                //Debug.Log($"set {index} to {value} ({gameObject.GetHashCode()})");
+                index = value;
+            }
         }
 
         public bool Valid => index != -1;

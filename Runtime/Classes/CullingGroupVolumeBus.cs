@@ -22,7 +22,7 @@ namespace Com.Culling
     }
 
     /// <summary>
-    /// 保存包围盒与剔除对象的全局总线
+    /// 保存包围盒与剔除对象的全局总线，全局单例会被激活的 <see cref="CullingGroupVolume"/> 唤醒
     /// </summary>
     internal class CullingGroupVolumeBus : MonoBehaviour, ICullingGroupVolumeBus
     {
@@ -185,7 +185,7 @@ namespace Com.Culling
             OnAddVolume?.Invoke(this, addIndex);
         }
 
-        public void Remove(IAABBCullingVolume volume)
+        public unsafe void Remove(IAABBCullingVolume volume)
         {
             if (destroyed) { return; }
             if (volume == null)
@@ -212,8 +212,8 @@ namespace Com.Culling
             volumeInstances[removeIndex].Index = removeIndex;
             volumeInstances.RemoveAt(lastIndex);
             instanceTransforms.RemoveAtSwapBack(removeIndex);
-            instancesLocalToWorld.RemoveAtSwapBack(removeIndex);
-            instancesLocalBounds.RemoveAtSwapBack(removeIndex);
+            Erase(instancesLocalToWorld, removeIndex, lastIndex);
+            Erase(instancesLocalBounds, removeIndex, lastIndex);
             if (lastIndex == 0)
             {
                 Assert.IsTrue(volumeInstances.Count == 0, "ins not empty");
@@ -221,9 +221,26 @@ namespace Com.Culling
 
             count--;
             Assert.AreEqual(count, volumeInstances.Count, nameof(count));
+            Assert.AreEqual(count, instanceTransforms.length, nameof(instanceTransforms));
             OnRemoveVolume?.Invoke(this, removeIndex);
 Finally:
             volume.Index = -1;
+
+
+            //if (UnityEngine.Application.isEditor)
+            //{
+            //    Debug.Log($"remove => {count}");
+            //    for (int i = 0; i < count; i++)
+            //    {
+            //        Debug.Log(volumeInstances[i].transform.name);
+            //        Assert.AreEqual(volumeInstances[i].Index, i);
+            //        Assert.AreEqual(volumeInstances[i].transform, instanceTransforms[i]);
+            //        Assert.AreEqual(volumeInstances[i].transform.localToWorldMatrix, instancesLocalToWorld[i]);
+            //        Bounds _lb = default;
+            //        volumeInstances[i].GetLocalBounds(&_lb);
+            //        Assert.AreEqual(_lb, instancesLocalBounds[i]);
+            //    }
+            //}
         }
 
 
@@ -245,6 +262,14 @@ Finally:
         /// </summary>
         public static event Action<CullingGroupVolumeBus> OnSetup;
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static unsafe void Erase<T>(NativeList<T> buffer, int index, int last) where T : unmanaged
+        {
+            //buffer[index] = buffer[last];
+            var ptr = (T*)buffer.GetUnsafePtr();
+            ptr[index] = ptr[last];
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static unsafe void Realloc<T>(ref NativeList<T> nativeList, int capacity) where T : unmanaged

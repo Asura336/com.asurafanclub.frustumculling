@@ -119,9 +119,10 @@ namespace Com.Culling
         private void CullingGroup_onStateChanged(AABBCullingGroupEvent eventContext)
         {
             int index = eventContext.index;
-            var volumes = CullingGroupVolumeBus.Instance.VolumesRef;
+            var bus = CullingGroupVolumeBus.Instance;
+            var volumes = bus.VolumesRef;
             if (index > volumes.Count - 1) { return; }
-            var item = CullingGroupVolumeBus.Instance.VolumesRef[index];
+            var item = bus.VolumesRef[index];
             if (eventContext.HasBecomeVisible)
             {
                 item.DoBecameVisible(targetCamera);
