@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
-using Unity.Jobs;
-using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Jobs;
@@ -36,10 +34,9 @@ namespace Com.Culling
         TransformAccessArray instanceTransforms;
         NativeList<Matrix4x4> instancesLocalToWorld;
         NativeList<Bounds> instancesLocalBounds;
+        NativeList<Bounds> instancesWorldBounds;
 
         bool destroyed = false;
-
-        bool anyUpdated = false;
 
         bool m_pauseUpdate = false;
         bool PauseUpdate
@@ -95,67 +92,46 @@ namespace Com.Culling
             Release(ref instancesLocalToWorld);
             Release(ref instancesLocalBounds);
             Release(ref instanceTransforms);
+            Release(ref instancesWorldBounds);
         }
 
         unsafe void LateUpdate()
         {
             if (PauseUpdate || count == 0 || destroyed) { return; }
 
-            // 同步变换矩阵
-            // 0.02 ms
-            var _anyDirty = new NativeArray<bool>(1, Allocator.TempJob);
-            new GetInsancesLocalToWorldFor
-            {
-                length = count,
-                dstLocalToWorlds = instancesLocalToWorld.AsArray().Reinterpret<float4x4>(),
-                anyUpdated = _anyDirty,
-            }.ScheduleReadOnly(instanceTransforms, 128).Complete();
-
-            anyUpdated |= *(bool*)_anyDirty.GetUnsafePtr();
-            _anyDirty.Dispose();
-
-            // 优化前从托管对象读取 localToWorldMatrix
+            // input
+            const int updateSample = 3;
             int start = Time.frameCount % updateSample;
-            //var pLocalToWorld = (Matrix4x4*)instancesLocalToWorld.GetUnsafePtr();
             var pLocalBounds = (Bounds*)instancesLocalBounds.GetUnsafePtr();
             for (int i = start; i < count; i += updateSample)
             {
                 if (volumeInstances[i].VolumeUpdated)
                 {
-                    //pLocalBounds[i] = volumeInstances[i].LocalBounds;
                     volumeInstances[i].GetLocalBounds(pLocalBounds + i);
-                    anyUpdated = true;
                 }
-
-                // 285 times, 0.54 ms
-                ////pLocalToWorld[i] = volumeInstances[i].LocalToWorld;
-                //volumeInstances[i].GetLocalToWorld(pLocalToWorld + i);
-                //anyUpdated = true;
             }
-            if (anyUpdated)
+
+            var getWorldBoundsJob = new GetWorldBoundsJobFor
             {
-                // job
-                using var volumes = new NativeArray<Bounds>(count, Allocator.TempJob,
-                     NativeArrayOptions.UninitializedMemory);
-                new TransposeBoundsFor
-                {
-                    localToWorld = instancesLocalToWorld.AsParallelReader().Reinterpret<float4x4>(),
-                    inputLocalBounds = instancesLocalBounds.AsParallelReader().Reinterpret<float3x2>(),
-                    outputWorldBounds = volumes.Reinterpret<float3x2>(),
-                }.Schedule(count, 64, default).Complete();
-
-                fixed (Bounds* pBounds = bounds)
-                {
-                    UnsafeUtility.MemCpy(pBounds, volumes.GetUnsafePtr(), count * sizeof(Bounds));
-                }
-
-                anyUpdated = false;
+                length = count,
+                localBounds = instancesLocalBounds.AsArray(),
+                worldBounds = instancesWorldBounds.AsArray(),
+            };
+            getWorldBoundsJob.ScheduleReadOnly(instanceTransforms, 64, default).Complete();
+            fixed (Bounds* pBounds = bounds)
+            {
+                UnsafeUtility.MemCpy(pBounds, instancesWorldBounds.GetUnsafePtr(), sizeof(Bounds) * count);
             }
         }
 
         public unsafe void Add(IAABBCullingVolume volume)
         {
             if (destroyed) { return; }
+            if (volumeInstances.Contains(volume))
+            {
+                Debug.LogWarning($"{volume.transform.name} already exists.");
+                return;
+            }
             if (volume == null)
             {
                 throw new ArgumentNullException("volume is Nothing");
@@ -168,6 +144,7 @@ namespace Com.Culling
                 unmanagedCapacity = Mathf.Max(defaultBufferLength, count * 2);
                 Realloc(ref instancesLocalToWorld, unmanagedCapacity);
                 Realloc(ref instancesLocalBounds, unmanagedCapacity);
+                Realloc(ref instancesWorldBounds, unmanagedCapacity);
                 Realloc(ref instanceTransforms, unmanagedCapacity);
                 AABBCullingHelper.Realloc(ref bounds, unmanagedCapacity);
             }
@@ -177,10 +154,10 @@ namespace Com.Culling
             bounds[addIndex] = volume.Volume;
             volume.GetLocalToWorld((Matrix4x4*)instancesLocalToWorld.GetUnsafePtr() + addIndex);
             volume.GetLocalBounds((Bounds*)instancesLocalBounds.GetUnsafePtr() + addIndex);
+            instancesWorldBounds.Add(volume.Volume);
             volume.Index = addIndex;
 
             count++;
-            anyUpdated = true;
 
             OnAddVolume?.Invoke(this, addIndex);
         }
@@ -214,6 +191,7 @@ namespace Com.Culling
             instanceTransforms.RemoveAtSwapBack(removeIndex);
             Erase(instancesLocalToWorld, removeIndex, lastIndex);
             Erase(instancesLocalBounds, removeIndex, lastIndex);
+            Erase(instancesWorldBounds, removeIndex, lastIndex);
             if (lastIndex == 0)
             {
                 Assert.IsTrue(volumeInstances.Count == 0, "ins not empty");

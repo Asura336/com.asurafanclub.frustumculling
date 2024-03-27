@@ -14,7 +14,7 @@ namespace Com.Culling.Test
         private void Awake()
         {
             volume = GetComponent<CullingGroupVolume>();
-            m_renderer = GetComponent<Renderer>();
+            m_renderer = GetComponentInChildren<Renderer>();
             m_material = m_renderer.material;
 
             volume.onBecameVisible.AddListener(Volume_onBecameVisible);

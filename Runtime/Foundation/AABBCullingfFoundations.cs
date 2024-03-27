@@ -2,13 +2,9 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Burst;
-using Unity.Burst.CompilerServices;
 using Unity.Collections;
-using Unity.Jobs;
-using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Jobs;
-using static Com.Culling.AABBCullingHelper;
 
 namespace Com.Culling
 {
@@ -145,32 +141,44 @@ namespace Com.Culling
         public static float Max(float a, float b) => a < b ? b : a;
 
         [BurstCompile]
-        public unsafe static void Mul(this in Bounds bounds, in Matrix4x4 mul, ref Bounds result)
-        {
-            float3 center = bounds.center, extents = bounds.extents;
-            float3 bMin = center - extents, bMax = center + extents;
-
-            float3 rMin = math.float3(float.MaxValue), rMax = math.float3(float.MinValue);
-            MulAndMinMax(mul, bMin.x, bMin.y, bMin.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMin.x, bMin.y, bMax.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMin.x, bMax.y, bMin.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMin.x, bMax.y, bMax.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMax.x, bMin.y, bMin.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMax.x, bMin.y, bMax.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMax.x, bMax.y, bMin.z, ref rMin, ref rMax);
-            MulAndMinMax(mul, bMax.x, bMax.y, bMax.z, ref rMin, ref rMax);
-
-            result.extents = (rMax - rMin) * 0.5f;
-            result.center = rMin + extents;
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void MulAndMinMax(in float4x4 matrix, float px, float py, float pz,
-            ref float3 minP, ref float3 maxP)
+        internal unsafe static void Mul(this in Bounds bounds, in Matrix4x4 mul, ref Bounds result)
         {
-            var wp = math.mul(matrix, math.float4(px, py, pz, 1)).xyz;
-            minP = math.min(wp, minP);
-            maxP = math.max(wp, maxP);
+            //var vector8 = stackalloc Vector3[8];
+            //Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+            //GetBoundsVerticesUnsafe(bounds, vector8);
+            //for (int i = 0; i < 8; i++)
+            //{
+            //    Vector3 point = mul.MultiplyPoint3x4(vector8[i]);
+            //    min = Vector3.Min(min, point);
+            //    max = Vector3.Max(max, point);
+            //}
+            //result = new Bounds(Vector3.Lerp(min, max, 0.5f), max - min);
+
+            Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+
+            Vector3 center = bounds.center, extents = bounds.extents;
+            Vector3 _min = center - extents, _max = center + extents;
+            Mul_TransformAndMinMax(new Vector3(_min.x, _min.y, _min.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_min.x, _min.y, _max.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_min.x, _max.y, _min.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_min.x, _max.y, _max.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_max.x, _min.y, _min.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_max.x, _min.y, _max.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_max.x, _max.y, _min.z), mul, ref min, ref max);
+            Mul_TransformAndMinMax(new Vector3(_max.x, _max.y, _max.z), mul, ref min, ref max);
+
+            result.extents = (max - min) / 2;
+            result.center = result.extents + min;
+            //result = new Bounds(Vector3.Lerp(min, max, 0.5f), max - min);
+        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void Mul_TransformAndMinMax(in Vector3 p, in Matrix4x4 mul, ref Vector3 min, ref Vector3 max)
+        {
+            Vector3 wp = default;
+            MultiplyPoint3x4(mul, p, ref wp);
+            min = Vector3.Min(min, wp);
+            max = Vector3.Max(max, wp);
         }
 
         [BurstCompile]
@@ -192,7 +200,7 @@ namespace Com.Culling
             }
         }
 
-        [BurstCompile]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void MultiplyPoint3x4(in Matrix4x4 mul, in Vector3 point, ref Vector3 result)
         {
             result.x = mul.m00 * point.x + mul.m01 * point.y + mul.m02 * point.z + mul.m03;
@@ -231,65 +239,19 @@ namespace Com.Culling
         }
     }
 
-    [BurstCompile(FloatPrecision = FloatPrecision.Standard,
-        FloatMode = FloatMode.Fast, CompileSynchronously = true)]
-    public struct TransposeBoundsFor : IJobParallelFor
-    {
-        [ReadOnly] public NativeArray<float4x4>.ReadOnly localToWorld;
-        [ReadOnly] public NativeArray<float3x2>.ReadOnly inputLocalBounds;
-        [WriteOnly] public NativeArray<float3x2> outputWorldBounds;
-
-        public unsafe void Execute(int index)
-        {
-            var bounds = inputLocalBounds[index];
-            float3 center = bounds.c0, extents = bounds.c1;
-            float3 bMin = center - extents, bMax = center + extents;
-
-            float3 worldMin = math.float3(float.MaxValue), worldMax = math.float3(float.MinValue);
-            var _localToWorld = localToWorld[index];
-            MulAndMinMax(_localToWorld, bMin.x, bMin.y, bMin.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMin.x, bMin.y, bMax.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMin.x, bMax.y, bMin.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMin.x, bMax.y, bMax.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMax.x, bMin.y, bMin.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMax.x, bMin.y, bMax.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMax.x, bMax.y, bMin.z, ref worldMin, ref worldMax);
-            MulAndMinMax(_localToWorld, bMax.x, bMax.y, bMax.z, ref worldMin, ref worldMax);
-
-            /* Bounds
-             *   m_Center
-             *   m_Extents
-             */
-            var worldExtents = (worldMax - worldMin) * 0.5f;
-            var worldCenter = worldMin + extents;
-            outputWorldBounds[index] = math.float3x2(worldCenter, worldExtents);
-        }
-    }
-
-    [BurstCompile(FloatPrecision = FloatPrecision.Standard,
-        FloatMode = FloatMode.Fast, CompileSynchronously = true)]
-    public struct GetInsancesLocalToWorldFor : IJobParallelForTransform
+    [BurstCompile(CompileSynchronously = true,
+       FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
+    internal struct GetWorldBoundsJobFor : IJobParallelForTransform
     {
         public int length;
-        public NativeArray<float4x4> dstLocalToWorlds;
+        [ReadOnly] public NativeArray<Bounds> localBounds;
+        [WriteOnly] public NativeArray<Bounds> worldBounds;
 
-        [WriteOnly]
-        [NativeDisableParallelForRestriction]
-        public NativeArray<bool> anyUpdated;
-
-        public unsafe void Execute(int index, TransformAccess transform)
+        public void Execute(int index, TransformAccess transform)
         {
-            if (Hint.Likely(index < length))
-            {
-                var currLocalToWorld = transform.localToWorldMatrix;
-                var currLocalToWorld4x4 = *(float4x4*)&currLocalToWorld;
-
-                if (!currLocalToWorld4x4.Equals(dstLocalToWorlds[index]))
-                {
-                    dstLocalToWorlds[index] = currLocalToWorld4x4;
-                    anyUpdated[0] = true;
-                }
-            }
+            Bounds _b = default;
+            localBounds[index].Mul(transform.localToWorldMatrix, ref _b);
+            worldBounds[index] = _b;
         }
     }
 }

@@ -14,7 +14,6 @@ namespace Com.Culling
     [AddComponentMenu("Com/Culling/CullingGroupVolume")]
     public class CullingGroupVolume : MonoBehaviour, IAABBCullingVolume
     {
-        [SerializeField] bool transformStatic;
         [SerializeField] Bounds localBounds;
         [SerializeField] int index = -1;
 
@@ -25,7 +24,6 @@ namespace Com.Culling
 
         bool volumeUpdated;
         Transform cachedTransform;
-        Matrix4x4 cachedLocalToWorld;
         bool destroyed = false;
         bool selfEnabled = false;
 
@@ -37,27 +35,25 @@ namespace Com.Culling
             onVolumeDisabled ??= new UnityEvent();
             lodChanged ??= new UnityEvent<Camera, IReadOnlyList<float>, int>();
             index = -1;
-        }
 
-        void Start()
-        {
             CullingGroupVolumeBus.OnSetup += CullingGroupVolumeBus_OnSetup;
         }
 
         private void CullingGroupVolumeBus_OnSetup(CullingGroupVolumeBus obj)
         {
-            if (!destroyed && selfEnabled && index == -1)
-            {
-                CullingGroupVolumeBus.Instance.Add(this);
-            }
+            InternalWakeup();
         }
 
         void OnEnable()
         {
-            selfEnabled = true;
-            cachedLocalToWorld = cachedTransform.localToWorldMatrix;
-            if (index == -1)
+            InternalWakeup();
+        }
+
+        void InternalWakeup()
+        {
+            if (!selfEnabled && !destroyed)
             {
+                selfEnabled = true;
                 CullingGroupVolumeBus.Instance.Add(this);
             }
         }
@@ -68,6 +64,7 @@ namespace Com.Culling
             onVolumeDisabled?.Invoke();
             //Debug.Log($"remove: {gameObject.name}({index})");
             CullingGroupVolumeBus.Instance.Remove(this);
+            index = -1;  // ensure index as invalid
         }
 
         void OnDestroy()
@@ -78,6 +75,61 @@ namespace Com.Culling
             onBecameInvisible.RemoveAllListeners();
             lodChanged.RemoveAllListeners();
             onVolumeDisabled.RemoveAllListeners();
+        }
+
+        unsafe void OnDrawGizmosSelected()
+        {
+            /* Bounds
+             *   m_Center : float3
+             *   m_Extents : float3
+             */
+            if (destroyed)
+            {
+                return;
+            }
+
+            var wb = Volume;
+            float* hExtents = (float*)&wb + 3;
+
+            // if Bounds.size != 0:
+            if (hExtents[0] != 0 && hExtents[1] != 0 && hExtents[2] != 0)
+            {
+                var vs8 = stackalloc Vector3[8];
+                wb.GetBoundsVerticesUnsafe(vs8);
+                //var localToWorld = transform.localToWorldMatrix;
+                //for (int i = 0; i < 8; i++)
+                //{
+                //    Vector3 worldVec = localToWorld.MultiplyPoint3x4(vs8[i]);
+                //    vs8[i] = worldVec;
+                //}
+
+                /* 0 0 0
+                 * 0 0 1
+                 * 0 1 0
+                 * 0 1 1
+                 * 
+                 * 1 0 0
+                 * 1 0 1
+                 * 1 1 0
+                 * 1 1 1
+                 */
+
+                Gizmos.color = Color.yellow;
+                Gizmos.DrawLine(vs8[0], vs8[1]);
+                Gizmos.DrawLine(vs8[2], vs8[3]);
+                Gizmos.DrawLine(vs8[4], vs8[5]);
+                Gizmos.DrawLine(vs8[6], vs8[7]);
+
+                Gizmos.DrawLine(vs8[0], vs8[2]);
+                Gizmos.DrawLine(vs8[1], vs8[3]);
+                Gizmos.DrawLine(vs8[4], vs8[6]);
+                Gizmos.DrawLine(vs8[5], vs8[7]);
+
+                Gizmos.DrawLine(vs8[0], vs8[4]);
+                Gizmos.DrawLine(vs8[1], vs8[5]);
+                Gizmos.DrawLine(vs8[2], vs8[6]);
+                Gizmos.DrawLine(vs8[3], vs8[7]);
+            }
         }
 
         unsafe void IAABBCullingVolume.GetLocalBounds(Bounds* dst)
@@ -91,13 +143,7 @@ namespace Com.Culling
             // 2001 times, 3.56 ms
             //*dst = destroyed ? Matrix4x4.identity : cachedTransform.localToWorldMatrix;
 
-            // 667 times, 1.23 ms
-            // 2001 times, 3.51 ms
-            if (!transformStatic)
-            {
-                cachedLocalToWorld = cachedTransform.localToWorldMatrix;
-            }
-            CopyMatrix(cachedLocalToWorld, ref *dst);
+            CopyMatrix(cachedTransform.localToWorldMatrix, ref *dst);
         }
         [BurstCompile]
         static void CopyMatrix(in Matrix4x4 src, ref Matrix4x4 dst)
@@ -172,11 +218,14 @@ namespace Com.Culling
             }
         }
 
-        public Matrix4x4 LocalToWorld => transformStatic
-            ? cachedLocalToWorld
-            : cachedLocalToWorld = cachedTransform.localToWorldMatrix;
-
-        public bool TransformStatic { get => transformStatic; set => transformStatic = value; }
+        public Matrix4x4 LocalToWorld
+        {
+            get
+            {
+                var t = cachedTransform ? cachedTransform : (cachedTransform = transform);
+                return t ? t.localToWorldMatrix : Matrix4x4.identity;
+            }
+        }
 
         /// <summary>
         /// 当前世界空间下的轴对齐包围盒

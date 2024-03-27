@@ -38,6 +38,23 @@ namespace Com.Culling
             cullingGroup.onStateChanged = CullingGroup_onStateChanged;
         }
 
+        private void Start()
+        {
+            if (CullingGroupVolumeBus.Instance is CullingGroupVolumeBus bus)
+            {
+                cullingGroup.Setup(bus.BoundsRef);
+                cullingGroup.Count = bus.Count;
+                cullingGroup.GetCurrentBuffer(out var prev, out var curr);
+                frameState = CullingGroupFrameState.CheckEventOnly;
+                int count = bus.Count;
+                for (int index = 0; index < count; index++)
+                {
+                    prev[index] = AABBCullingContext.Visible;
+                    curr[index] = AABBCullingContext.Visible;
+                }
+            }
+        }
+
         private void OnEnable()
         {
             CullingGroupVolumeBus.OnAddVolume += CullingGroupVolumeBus_OnAddVolume;
