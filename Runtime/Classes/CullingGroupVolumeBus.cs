@@ -30,6 +30,7 @@ namespace Com.Culling
         const int updateSample = 7;
 
         int count = 0;
+        int unmanagedCapacity = 0;
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
         Bounds[] bounds;
         TransformAccessArray instanceTransforms;
@@ -162,13 +163,13 @@ namespace Com.Culling
             PauseUpdate = true;
 
             int addIndex = count;
-            if (addIndex + 1 > volumeInstances.Count)
+            if (addIndex + 1 > unmanagedCapacity)
             {
-                int newLength = Mathf.Max(defaultBufferLength, count * 2);
-                Realloc(ref instancesLocalToWorld, newLength);
-                Realloc(ref instancesLocalBounds, newLength);
-                Realloc(ref instanceTransforms, newLength);
-                AABBCullingHelper.Realloc(ref bounds, newLength);
+                unmanagedCapacity = Mathf.Max(defaultBufferLength, count * 2);
+                Realloc(ref instancesLocalToWorld, unmanagedCapacity);
+                Realloc(ref instancesLocalBounds, unmanagedCapacity);
+                Realloc(ref instanceTransforms, unmanagedCapacity);
+                AABBCullingHelper.Realloc(ref bounds, unmanagedCapacity);
             }
             volumeInstances.Add(volume);
             instanceTransforms.Add(volume.transform);
@@ -219,6 +220,7 @@ namespace Com.Culling
             }
 
             count--;
+            Assert.AreEqual(count, volumeInstances.Count, nameof(count));
             OnRemoveVolume?.Invoke(this, removeIndex);
 Finally:
             volume.Index = -1;
