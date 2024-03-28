@@ -32,7 +32,6 @@ namespace Com.Culling
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
         Bounds[] bounds;
         TransformAccessArray instanceTransforms;
-        NativeList<Matrix4x4> instancesLocalToWorld;
         NativeList<Bounds> instancesLocalBounds;
         NativeList<Bounds> instancesWorldBounds;
 
@@ -89,7 +88,6 @@ namespace Com.Culling
         void OnDestroy()
         {
             destroyed = true;
-            Release(ref instancesLocalToWorld);
             Release(ref instancesLocalBounds);
             Release(ref instanceTransforms);
             Release(ref instancesWorldBounds);
@@ -142,7 +140,6 @@ namespace Com.Culling
             if (addIndex + 1 > unmanagedCapacity)
             {
                 unmanagedCapacity = Mathf.Max(defaultBufferLength, count * 2);
-                Realloc(ref instancesLocalToWorld, unmanagedCapacity);
                 Realloc(ref instancesLocalBounds, unmanagedCapacity);
                 Realloc(ref instancesWorldBounds, unmanagedCapacity);
                 Realloc(ref instanceTransforms, unmanagedCapacity);
@@ -152,7 +149,6 @@ namespace Com.Culling
             instanceTransforms.Add(volume.transform);
             Assert.AreEqual(instanceTransforms.length, count + 1);
             bounds[addIndex] = volume.Volume;
-            volume.GetLocalToWorld((Matrix4x4*)instancesLocalToWorld.GetUnsafePtr() + addIndex);
             volume.GetLocalBounds((Bounds*)instancesLocalBounds.GetUnsafePtr() + addIndex);
             instancesWorldBounds.Add(volume.Volume);
             volume.Index = addIndex;
@@ -189,7 +185,6 @@ namespace Com.Culling
             volumeInstances[removeIndex].Index = removeIndex;
             volumeInstances.RemoveAt(lastIndex);
             instanceTransforms.RemoveAtSwapBack(removeIndex);
-            Erase(instancesLocalToWorld, removeIndex, lastIndex);
             Erase(instancesLocalBounds, removeIndex, lastIndex);
             Erase(instancesWorldBounds, removeIndex, lastIndex);
             if (lastIndex == 0)
