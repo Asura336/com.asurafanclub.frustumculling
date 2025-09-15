@@ -27,14 +27,20 @@ namespace Com.Culling.Test
             volume.lodChanged.AddListener(Volume_lodChanged);
         }
 
+        private void OnEnable()
+        {
+            // reset anyway
+            m_renderer.forceRenderingOff = false;
+        }
+
         void Volume_onBecameVisible(Camera camera)
         {
-            m_renderer.enabled = true;
+            m_renderer.forceRenderingOff = false;
         }
 
         void Volume_onBecameInvisible(Camera camera)
         {
-            m_renderer.enabled = false;
+            m_renderer.forceRenderingOff = true;
         }
 
         void Volume_lodChanged(Camera camera, IReadOnlyList<float> lods, int lodLevel)

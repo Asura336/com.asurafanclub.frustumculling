@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using UnityEngine.Assertions;
 using static Com.Culling.AABBCullingHelper;
 
@@ -160,11 +161,8 @@ namespace Com.Culling
             // ctx1 => before
             revertCtxBufferFrame = 0;
             GetCurrentBuffer(out var prev, out var curr);
-            for (int i = 0; i < count; i++)
-            {
-                prev[i] = AABBCullingContext.Invisible;
-                curr[i] = AABBCullingContext.Visible;
-            }
+            Array.Fill(prev, AABBCullingContext.Invisible);
+            Array.Fill(curr, AABBCullingContext.Visible);
             // 立即检查一次事件？
             CheckEvent(prev, curr, bufferCount);
         }

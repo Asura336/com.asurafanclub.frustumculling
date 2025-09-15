@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -46,12 +47,8 @@ namespace Com.Culling
                 cullingGroup.Count = bus.Count;
                 cullingGroup.GetCurrentBuffer(out var prev, out var curr);
                 frameState = CullingGroupFrameState.CheckEventOnly;
-                int count = bus.Count;
-                for (int index = 0; index < count; index++)
-                {
-                    prev[index] = AABBCullingContext.Visible;
-                    curr[index] = AABBCullingContext.Visible;
-                }
+                Array.Fill(prev, AABBCullingContext.Visible);
+                Array.Fill(curr, AABBCullingContext.Visible);
             }
         }
 
@@ -139,7 +136,7 @@ namespace Com.Culling
             var bus = CullingGroupVolumeBus.Instance;
             var volumes = bus.VolumesRef;
             if (index > volumes.Count - 1) { return; }
-            var item = bus.VolumesRef[index];
+            var item = volumes[index];
             if (eventContext.HasBecomeVisible)
             {
                 item.DoBecameVisible(targetCamera);

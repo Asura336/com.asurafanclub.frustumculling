@@ -25,11 +25,12 @@ namespace Com.Culling
     internal class CullingGroupVolumeBus : MonoBehaviour, ICullingGroupVolumeBus
     {
         public const int defaultBufferLength = 1024;
-        const int updateSample = 7;
+        const int updateSample = 13;
 
         int count = 0;
         int unmanagedCapacity = 0;
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
+        readonly HashSet<IAABBCullingVolume> volumeInstSet = new HashSet<IAABBCullingVolume>();
         Bounds[] bounds = Array.Empty<Bounds>();
         TransformAccessArray instanceTransforms;
         NativeList<Bounds> instancesLocalBounds;
@@ -99,14 +100,15 @@ namespace Com.Culling
             if (PauseUpdate || count == 0 || destroyed) { return; }
 
             // input
-            const int updateSample = 3;
             int start = Time.frameCount % updateSample;
             var pLocalBounds = (Bounds*)instancesLocalBounds.GetUnsafePtr();
+            var read_volumeInstances = volumeInstances.UnsafeGetItems();
             for (int i = start; i < count; i += updateSample)
             {
-                if (volumeInstances[i].VolumeUpdated)
+                ref readonly var volumeInst = ref read_volumeInstances[i];
+                if (volumeInst.VolumeUpdated)
                 {
-                    volumeInstances[i].GetLocalBounds(pLocalBounds + i);
+                    volumeInst.GetLocalBounds(pLocalBounds + i);
                 }
             }
 
@@ -126,7 +128,8 @@ namespace Com.Culling
         public unsafe void Add(IAABBCullingVolume volume)
         {
             if (destroyed) { return; }
-            if (volumeInstances.Contains(volume))
+            //if (volumeInstances.Contains(volume))
+            if (volumeInstSet.Contains(volume))
             {
                 Debug.LogWarning($"{volume.transform.name} already exists.");
                 return;
@@ -140,7 +143,7 @@ namespace Com.Culling
             int addIndex = count;
             if (addIndex + 1 > unmanagedCapacity)
             {
-                unmanagedCapacity = Mathf.Max(defaultBufferLength, count * 2);
+                unmanagedCapacity = Mathf.Max(defaultBufferLength, MathHelpers.CeilPow2(count));
                 Realloc(ref instancesLocalBounds, unmanagedCapacity);
                 Realloc(ref instancesWorldBounds, unmanagedCapacity);
                 Realloc(ref instanceTransforms, unmanagedCapacity);
@@ -155,6 +158,8 @@ namespace Com.Culling
             volume.Index = addIndex;
 
             count++;
+            volumeInstSet.Add(volume);
+            Assert.AreEqual(volumeInstSet.Count, count);
 
             //OnAddVolume?.Invoke(this, addIndex);
             InvokeEvent(sbuffer_OnAddVolume, this, addIndex);
@@ -168,7 +173,11 @@ namespace Com.Culling
                 throw new ArgumentNullException("volume is Nothing");
             }
             if (!volume.Valid) { return; }
-            if (volumeInstances.Count == 0) { return; }
+            if (volumeInstances.Count == 0)
+            {
+                Assert.AreEqual(volumeInstSet.Count, 0);
+                return;
+            }
 
             int removeIndex = volume.Index;
             if (!ReferenceEquals(volume, volumeInstances[removeIndex]))
@@ -183,8 +192,9 @@ namespace Com.Culling
 
             // erase
             int lastIndex = volumeInstances.Count - 1;
-            volumeInstances[removeIndex] = volumeInstances[lastIndex];
-            volumeInstances[removeIndex].Index = removeIndex;
+            var rw_volumeInstances = volumeInstances.UnsafeGetItems();
+            rw_volumeInstances[removeIndex] = rw_volumeInstances[lastIndex];
+            rw_volumeInstances[removeIndex].Index = removeIndex;
             volumeInstances.RemoveAt(lastIndex);
             instanceTransforms.RemoveAtSwapBack(removeIndex);
             Erase(instancesLocalBounds, removeIndex, lastIndex);
@@ -201,7 +211,7 @@ namespace Com.Culling
             InvokeEvent(sbuffer_OnRemoveVolume, this, removeIndex);
 Finally:
             volume.Index = -1;
-
+            volumeInstSet.Remove(volume);
 
             //if (UnityEngine.Application.isEditor)
             //{

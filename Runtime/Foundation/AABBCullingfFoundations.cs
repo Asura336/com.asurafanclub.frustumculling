@@ -168,7 +168,7 @@ namespace Com.Culling
             Mul_TransformAndMinMax(new Vector3(_max.x, _max.y, _min.z), mul, ref min, ref max);
             Mul_TransformAndMinMax(new Vector3(_max.x, _max.y, _max.z), mul, ref min, ref max);
 
-            result.extents = (max - min) / 2;
+            result.extents = (max - min) * 0.5f;
             result.center = result.extents + min;
             //result = new Bounds(Vector3.Lerp(min, max, 0.5f), max - min);
         }
@@ -236,6 +236,35 @@ namespace Com.Culling
             result.y = lhs.m10 * vector.x + lhs.m11 * vector.y + lhs.m12 * vector.z + lhs.m13 * vector.w;
             result.z = lhs.m20 * vector.x + lhs.m21 * vector.y + lhs.m22 * vector.z + lhs.m23 * vector.w;
             result.w = lhs.m30 * vector.x + lhs.m31 * vector.y + lhs.m32 * vector.z + lhs.m33 * vector.w;
+        }
+
+        [BurstCompile]
+        public static void MulVector(this in Matrix4x4 lhs, in Vector3 vector, ref Vector3 result)
+        {
+            result.x = lhs.m00 * vector.x + lhs.m01 * vector.y + lhs.m02 * vector.z;
+            result.y = lhs.m10 * vector.x + lhs.m11 * vector.y + lhs.m12 * vector.z;
+            result.z = lhs.m20 * vector.x + lhs.m21 * vector.y + lhs.m22 * vector.z;
+        }
+
+        [BurstCompile]
+        public static void MulPoint(this in Matrix4x4 lhs, in Vector3 point, ref Vector3 result)
+        {
+            result.x = lhs.m00 * point.x + lhs.m01 * point.y + lhs.m02 * point.z + lhs.m03;
+            result.y = lhs.m10 * point.x + lhs.m11 * point.y + lhs.m12 * point.z + lhs.m13;
+            result.z = lhs.m20 * point.x + lhs.m21 * point.y + lhs.m22 * point.z + lhs.m23;
+            float num = lhs.m30 * point.x + lhs.m31 * point.y + lhs.m32 * point.z + lhs.m33;
+            num = 1f / num;
+            result.x *= num;
+            result.y *= num;
+            result.z *= num;
+        }
+
+        [BurstCompile]
+        public static void MulPoint3x4(this in Matrix4x4 lhs, in Vector3 point, ref Vector3 result)
+        {
+            result.x = lhs.m00 * point.x + lhs.m01 * point.y + lhs.m02 * point.z + lhs.m03;
+            result.y = lhs.m10 * point.x + lhs.m11 * point.y + lhs.m12 * point.z + lhs.m13;
+            result.z = lhs.m20 * point.x + lhs.m21 * point.y + lhs.m22 * point.z + lhs.m23;
         }
     }
 

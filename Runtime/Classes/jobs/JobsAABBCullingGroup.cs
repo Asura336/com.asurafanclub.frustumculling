@@ -16,8 +16,10 @@ namespace Com.Culling
     {
         protected override unsafe void Culling(AABBCullingContext[] dst, Bounds[] src, int count)
         {
-            var cameraForward = cameraLocalToWorldMatrix.MultiplyVector(Vector3.forward);
-            var cameraPosition = cameraLocalToWorldMatrix.MultiplyPoint(Vector3.zero);
+            Vector3 cameraForward = default;
+            cameraLocalToWorldMatrix.MulVector(Vector3.forward, ref cameraForward);
+            Vector3 cameraPosition = default;
+            cameraLocalToWorldMatrix.MulPoint3x4(Vector3.zero, ref cameraPosition);
             // 2000 bounds, 0.07 ms
             var inputBounds = new NativeArray<Bounds>(src, Allocator.TempJob)
                 .Reinterpret<float3x2>();
@@ -38,10 +40,10 @@ namespace Com.Culling
             job.Complete();
 
             // copy to
-            var pOutputCtxArr = (AABBCullingContext*)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(outputCtxArr);
-            for (int i = 0; i < count; i++)
+            var pOutputCtxArr = (AABBCullingContext*)outputCtxArr.GetUnsafeReadOnlyPtr();
+            fixed (AABBCullingContext* p_dst = dst)
             {
-                dst[i] = pOutputCtxArr[i];
+                UnsafeUtility.MemCpy(p_dst, pOutputCtxArr, sizeof(AABBCullingContext) * count);
             }
 
             outputCtxArr.Dispose();
