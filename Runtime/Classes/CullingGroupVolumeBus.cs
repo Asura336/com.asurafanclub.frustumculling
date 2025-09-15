@@ -30,7 +30,7 @@ namespace Com.Culling
         int count = 0;
         int unmanagedCapacity = 0;
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
-        Bounds[] bounds;
+        Bounds[] bounds = Array.Empty<Bounds>();
         TransformAccessArray instanceTransforms;
         NativeList<Bounds> instancesLocalBounds;
         NativeList<Bounds> instancesWorldBounds;
@@ -82,7 +82,8 @@ namespace Com.Culling
             }
 
             Instance = this;
-            OnSetup?.Invoke(this);
+            //OnSetup?.Invoke(this);
+            InvokeEvent(sbuffer_OnSetup, this);
         }
 
         void OnDestroy()
@@ -155,7 +156,8 @@ namespace Com.Culling
 
             count++;
 
-            OnAddVolume?.Invoke(this, addIndex);
+            //OnAddVolume?.Invoke(this, addIndex);
+            InvokeEvent(sbuffer_OnAddVolume, this, addIndex);
         }
 
         public unsafe void Remove(IAABBCullingVolume volume)
@@ -195,7 +197,8 @@ namespace Com.Culling
             count--;
             Assert.AreEqual(count, volumeInstances.Count, nameof(count));
             Assert.AreEqual(count, instanceTransforms.length, nameof(instanceTransforms));
-            OnRemoveVolume?.Invoke(this, removeIndex);
+            //OnRemoveVolume?.Invoke(this, removeIndex);
+            InvokeEvent(sbuffer_OnRemoveVolume, this, removeIndex);
 Finally:
             volume.Index = -1;
 
@@ -222,18 +225,44 @@ Finally:
         public IReadOnlyList<IAABBCullingVolume> VolumesRef => volumeInstances != null
             ? volumeInstances : Array.Empty<IAABBCullingVolume>();
 
+        static readonly HashSet<Action<CullingGroupVolumeBus, int>> sbuffer_OnAddVolume = new(defaultBufferLength);
+        static readonly HashSet<Action<CullingGroupVolumeBus, int>> sbuffer_OnRemoveVolume = new(defaultBufferLength);
+        static readonly HashSet<Action<CullingGroupVolumeBus>> sbuffer_OnSetup = new(defaultBufferLength);
+        static void InvokeEvent<TSet, TArg>(TSet events, TArg arg)
+            where TSet : HashSet<Action<TArg>>
+        {
+            foreach (var e in events) { e?.Invoke(arg); }
+        }
+        static void InvokeEvent<TSet, TArg0, TArg1>(TSet events, TArg0 arg0, TArg1 arg1)
+            where TSet : HashSet<Action<TArg0, TArg1>>
+        {
+            foreach (var e in events) { e?.Invoke(arg0, arg1); }
+        }
+
         /// <summary>
         /// 加入了一个剔除物体，传递总线引用和新加入的序号
         /// </summary>
-        public static event Action<CullingGroupVolumeBus, int> OnAddVolume;
+        public static event Action<CullingGroupVolumeBus, int> OnAddVolume
+        {
+            add => sbuffer_OnAddVolume.Add(value);
+            remove => sbuffer_OnAddVolume.Remove(value);
+        }
         /// <summary>
         /// 移除了一个剔除物体，
         /// </summary>
-        public static event Action<CullingGroupVolumeBus, int> OnRemoveVolume;
+        public static event Action<CullingGroupVolumeBus, int> OnRemoveVolume
+        {
+            add => sbuffer_OnRemoveVolume.Add(value);
+            remove => sbuffer_OnRemoveVolume.Remove(value);
+        }
         /// <summary>
         /// 总线被激活
         /// </summary>
-        public static event Action<CullingGroupVolumeBus> OnSetup;
+        public static event Action<CullingGroupVolumeBus> OnSetup
+        {
+            add => sbuffer_OnSetup.Add(value);
+            remove => sbuffer_OnSetup.Remove(value);
+        }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
