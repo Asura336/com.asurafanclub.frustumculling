@@ -143,7 +143,7 @@ namespace Com.Culling
             int addIndex = count;
             if (addIndex + 1 > unmanagedCapacity)
             {
-                unmanagedCapacity = Mathf.Max(defaultBufferLength, MathHelpers.CeilPow2(count));
+                unmanagedCapacity = Mathf.Max(defaultBufferLength, MathHelpers.CeilPow2(count + 1));
                 Realloc(ref instancesLocalBounds, unmanagedCapacity);
                 Realloc(ref instancesWorldBounds, unmanagedCapacity);
                 Realloc(ref instanceTransforms, unmanagedCapacity);
