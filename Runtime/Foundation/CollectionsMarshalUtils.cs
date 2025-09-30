@@ -21,7 +21,7 @@ namespace Com.Culling
         public static T[] UnsafeGetItems<T>(this List<T> target)
         {
             if (target is null) { return null; }
-            var listData = Unsafe.As<List<T>, ListDataHelper<T>>(ref target);
+            var listData = UnsafeUtility.As<List<T>, ListDataHelper<T>>(ref target);
             return listData._items;
         }
 
@@ -100,7 +100,7 @@ namespace Com.Culling
         private static int GetNewCapacity<T>(this List<T> list, int capacity)
         {
             const int DefaultCapacity = 4;
-            var listData = Unsafe.As<List<T>, ListDataHelper<T>>(ref list);
+            var listData = UnsafeUtility.As<List<T>, ListDataHelper<T>>(ref list);
             T[] _items = listData._items;
             //Debug.Assert(_items.Length < capacity);
 
