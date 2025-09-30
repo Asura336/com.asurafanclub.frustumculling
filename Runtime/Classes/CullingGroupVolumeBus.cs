@@ -6,6 +6,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Jobs;
+using static Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility;
 
 namespace Com.Culling
 {
@@ -22,19 +23,23 @@ namespace Com.Culling
     /// <summary>
     /// 保存包围盒与剔除对象的全局总线，全局单例会被激活的 <see cref="CullingGroupVolume"/> 唤醒
     /// </summary>
-    internal class CullingGroupVolumeBus : MonoBehaviour, ICullingGroupVolumeBus
+    internal unsafe class CullingGroupVolumeBus : MonoBehaviour, ICullingGroupVolumeBus
     {
         public const int defaultBufferLength = 1024;
         const int updateSample = 13;
 
+        static readonly Bounds Infinity = new Bounds(default, Vector3.one * float.PositiveInfinity);
+
         int count = 0;
         int unmanagedCapacity = 0;
         readonly List<IAABBCullingVolume> volumeInstances = new List<IAABBCullingVolume>(defaultBufferLength);
-        readonly HashSet<IAABBCullingVolume> volumeInstSet = new HashSet<IAABBCullingVolume>();
+        readonly HashSet<IAABBCullingVolume> volumeInstSet = new HashSet<IAABBCullingVolume>(defaultBufferLength);
         Bounds[] bounds = Array.Empty<Bounds>();
         TransformAccessArray instanceTransforms;
-        NativeList<Bounds> instancesLocalBounds;
-        NativeList<Bounds> instancesWorldBounds;
+        NativeArray<Bounds> instancesLocalBounds;
+        Bounds* instancesLocalBoundsPnt;
+        NativeArray<Bounds> instancesWorldBounds;
+        Bounds* instancesWorldBoundsPnt;
 
         bool destroyed = false;
 
@@ -90,9 +95,9 @@ namespace Com.Culling
         void OnDestroy()
         {
             destroyed = true;
-            Release(ref instancesLocalBounds);
+            Release(ref instancesLocalBounds); instancesLocalBoundsPnt = null;
+            Release(ref instancesWorldBounds); instancesWorldBoundsPnt = null;
             Release(ref instanceTransforms);
-            Release(ref instancesWorldBounds);
         }
 
         unsafe void LateUpdate()
@@ -101,27 +106,26 @@ namespace Com.Culling
 
             // input
             int start = Time.frameCount % updateSample;
-            var pLocalBounds = (Bounds*)instancesLocalBounds.GetUnsafePtr();
             var read_volumeInstances = volumeInstances.UnsafeGetItems();
             for (int i = start; i < count; i += updateSample)
             {
                 ref readonly var volumeInst = ref read_volumeInstances[i];
                 if (volumeInst.VolumeUpdated)
                 {
-                    volumeInst.GetLocalBounds(pLocalBounds + i);
+                    volumeInst.GetLocalBounds(instancesLocalBoundsPnt + i);
                 }
             }
 
             var getWorldBoundsJob = new GetWorldBoundsJobFor
             {
                 length = count,
-                localBounds = instancesLocalBounds.AsArray(),
-                worldBounds = instancesWorldBounds.AsArray(),
+                localBounds = instancesLocalBounds,
+                worldBounds = instancesWorldBounds,
             };
             getWorldBoundsJob.ScheduleReadOnly(instanceTransforms, 64, default).Complete();
             fixed (Bounds* pBounds = bounds)
             {
-                UnsafeUtility.MemCpy(pBounds, instancesWorldBounds.GetUnsafePtr(), sizeof(Bounds) * count);
+                UnsafeUtility.MemCpy(pBounds, instancesWorldBoundsPnt, sizeof(Bounds) * count);
             }
         }
 
@@ -145,16 +149,24 @@ namespace Com.Culling
             {
                 unmanagedCapacity = Mathf.Max(defaultBufferLength, MathHelpers.CeilPow2(count + 1));
                 Realloc(ref instancesLocalBounds, unmanagedCapacity);
+                instancesLocalBoundsPnt = (Bounds*)GetUnsafeBufferPointerWithoutChecks(instancesLocalBounds);
                 Realloc(ref instancesWorldBounds, unmanagedCapacity);
+                instancesWorldBoundsPnt = (Bounds*)GetUnsafeBufferPointerWithoutChecks(instancesWorldBounds);
                 Realloc(ref instanceTransforms, unmanagedCapacity);
                 AABBCullingHelper.Realloc(ref bounds, unmanagedCapacity);
             }
             volumeInstances.Add(volume);
             instanceTransforms.Add(volume.transform);
             Assert.AreEqual(instanceTransforms.length, count + 1);
-            bounds[addIndex] = volume.Volume;
-            volume.GetLocalBounds((Bounds*)instancesLocalBounds.GetUnsafePtr() + addIndex);
-            instancesWorldBounds.Add(volume.Volume);
+
+            //bounds[addIndex] = volume.Volume;
+            bounds[addIndex] = Infinity;
+
+            volume.GetLocalBounds(instancesLocalBoundsPnt + addIndex);
+
+            //instancesWorldBoundsPnt[addIndex] = volume.Volume;
+            instancesWorldBoundsPnt[addIndex] = Infinity;
+
             volume.Index = addIndex;
 
             count++;
@@ -197,8 +209,8 @@ namespace Com.Culling
             rw_volumeInstances[removeIndex].Index = removeIndex;
             volumeInstances.RemoveAt(lastIndex);
             instanceTransforms.RemoveAtSwapBack(removeIndex);
-            Erase(instancesLocalBounds, removeIndex, lastIndex);
-            Erase(instancesWorldBounds, removeIndex, lastIndex);
+            Erase(instancesLocalBoundsPnt, removeIndex, lastIndex);
+            Erase(instancesWorldBoundsPnt, removeIndex, lastIndex);
             if (lastIndex == 0)
             {
                 Assert.IsTrue(volumeInstances.Count == 0, "ins not empty");
@@ -276,54 +288,50 @@ Finally:
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static unsafe void Erase<T>(NativeList<T> buffer, int index, int last) where T : unmanaged
+        static unsafe void Erase(Bounds* ptr, int index, int last)
         {
             //buffer[index] = buffer[last];
-            var ptr = (T*)buffer.GetUnsafePtr();
-            ptr[index] = ptr[last];
+            UnsafeUtility.MemCpy(ptr + index, ptr + last, sizeof(Bounds));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static unsafe void Realloc<T>(ref NativeList<T> nativeList, int capacity) where T : unmanaged
+        static unsafe void Realloc<T>(ref NativeArray<T> v, int capacity) where T : unmanaged
         {
-            if (nativeList.IsCreated)
+            if (v.IsCreated)
             {
-                nativeList.ResizeUninitialized(capacity);
-                nativeList.Length = capacity;
-                if (nativeList.Capacity > capacity)
-                {
-                    nativeList.TrimExcess();
-                }
+                var newArr = new NativeArray<T>(capacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+                UnsafeUtility.MemCpy(GetUnsafeBufferPointerWithoutChecks(newArr),
+                    GetUnsafeBufferPointerWithoutChecks(v),
+                    Math.Min(capacity, v.Length) * sizeof(T));
+                v.Dispose();
+                v = newArr;
             }
             else
             {
-                nativeList = new NativeList<T>(capacity, AllocatorManager.Persistent)
-                {
-                    Length = capacity
-                };
+                v = new NativeArray<T>(capacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Realloc(ref TransformAccessArray transformAccessArray, int size)
+        public static void Realloc(ref TransformAccessArray v, int size)
         {
-            if (transformAccessArray.isCreated)
+            if (v.isCreated)
             {
-                transformAccessArray.capacity = size;
+                v.capacity = size;
             }
             else
             {
-                TransformAccessArray.Allocate(size, -1, out transformAccessArray);
+                TransformAccessArray.Allocate(size, -1, out v);
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static unsafe void Release<T>(ref NativeList<T> nativeList) where T : unmanaged
+        static unsafe void Release<T>(ref NativeArray<T> v) where T : unmanaged
         {
-            if (nativeList.IsCreated)
+            if (v.IsCreated)
             {
-                nativeList.Dispose();
-                nativeList = default;
+                v.Dispose();
+                v = default;
             }
         }
 

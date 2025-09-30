@@ -28,6 +28,9 @@ namespace Com.Culling
 
         CullingGroupFrameState frameState = 0;
 
+        [Tooltip("Frustum planes offset (Meter)")]
+        [SerializeField] float skin = 0;
+
         private void Awake()
         {
             targetCamera = GetComponent<Camera>();
@@ -59,6 +62,7 @@ namespace Com.Culling
             RenderPipelineManager.beginContextRendering += RenderPipelineManager_beginContextRendering;
 
             frameState = CullingGroupFrameState.DoCull;
+            cullingGroup.Skin = skin;
             cullingGroup.SetLodLevels(lodLevels);
         }
 
@@ -73,8 +77,19 @@ namespace Com.Culling
 
         private void OnDestroy()
         {
+            cullingGroup.ReleasePersistBuffers();
             cullingGroup.onStateChanged = null;
         }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (cullingGroup != null)
+            {
+                cullingGroup.Skin = skin;
+            }
+        }
+#endif
 
         private void CullingGroupVolumeBus_OnAddVolume(CullingGroupVolumeBus bus, int index)
         {

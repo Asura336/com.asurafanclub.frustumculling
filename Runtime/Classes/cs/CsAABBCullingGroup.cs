@@ -5,6 +5,7 @@ using static Com.Culling.AABBCullingHelper;
 
 namespace Com.Culling
 {
+    [Obsolete("从计算着色器回读结果效率太低，用作业系统替代")]
     public class CsAABBCullingGroup : SimpleAABBCullingGroup, IDisposable
     {
         const int sizeofBounds = sizeof(float) * 6;

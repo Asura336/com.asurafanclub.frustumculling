@@ -23,6 +23,7 @@ namespace Com.Culling
     /// 托管剔除组的 MonoBehaviour，实现剔除组的自动注册机制并发起轮询。
     ///如果要为项目指定剔除组，不要继承此组件，而应该继承 <see cref="AABBCullingGroupKeeperTemplate{TGroup, TVolume}"/>
     /// </summary>
+    [Obsolete("使用或者重写 CameraCullingGroup")]
     public abstract class AbsAABBCullingGroupKeeper : MonoBehaviour, IAABBCullingGroupKeeper
     {
         protected enum CullingGroupFrameState
@@ -104,6 +105,7 @@ namespace Com.Culling
             {
                 instancesLocalToWorld.Dispose();
             }
+            cullingGroup.ReleasePersistBuffers();
         }
 
         protected virtual unsafe void LateUpdate()
@@ -263,6 +265,7 @@ Finally:
     /// </summary>
     /// <typeparam name="TGroup"></typeparam>
     /// <typeparam name="TVolume"></typeparam>
+    [Obsolete("使用或者重写 CameraCullingGroup")]
     public abstract class AABBCullingGroupKeeperTemplate<TGroup, TVolume> : AbsAABBCullingGroupKeeper
         where TGroup : AbsAABBCullingGroup, new()
         where TVolume : IAABBCullingVolume
@@ -274,6 +277,7 @@ Finally:
     /// 最简单的剔除组实现，使用单线程代码，被剔除物体使用 <see cref="UnityEngine.Object.FindObjectOfType(Type)"/> 查询剔除组
     ///直接挂载在场景里的话，要确保只有一个同类组件。
     /// </summary>
+    [Obsolete("如非调试用途，使用或者重写 CameraCullingGroup")]
     public class SimpleAABBCullingGroupKeeper : AABBCullingGroupKeeperTemplate<SimpleAABBCullingGroup, SimpleAABBCullingVolume>
     {
 

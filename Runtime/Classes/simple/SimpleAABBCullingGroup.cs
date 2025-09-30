@@ -69,6 +69,8 @@ namespace Com.Culling
         public abstract int Count { get; set; }
         public abstract Camera ReferenceCamera { get; set; }
 
+        public abstract float Skin { get; set; }
+
         public abstract void EraseAt(int index);
         public abstract void SetLodLevels(float[] lodLevels);
         public abstract void Setup(Bounds[] array);
@@ -78,6 +80,7 @@ namespace Com.Culling
         public abstract void CheckEvent();
         public abstract AABBCullingContext GetInternalVisibleContextAt(int index);
         public abstract void Update();
+        public virtual void ReleasePersistBuffers() { }
     }
 
     /// <summary>
@@ -109,8 +112,8 @@ namespace Com.Culling
         protected Bounds[] bounds;
 
         // 两个缓冲区在来回交换，作为“当前帧”和“上一帧”的缓冲区
-        protected AABBCullingContext[] ctx0 = new AABBCullingContext[0];
-        protected AABBCullingContext[] ctx1 = new AABBCullingContext[0];
+        protected AABBCullingContext[] ctx0 = Array.Empty<AABBCullingContext>();
+        protected AABBCullingContext[] ctx1 = Array.Empty<AABBCullingContext>();
 
         protected int revertCtxBufferFrame = 0;
 
@@ -133,6 +136,8 @@ namespace Com.Culling
                 UpdateMatrix();
             }
         }
+
+        public override float Skin { get; set; }
 
         public override void EraseAt(int index)
         {
@@ -274,6 +279,14 @@ namespace Com.Culling
             {
                 VpMatrix(ref vpMatrix, referenceCamera);
                 GeometryUtility.CalculateFrustumPlanes(vpMatrix, frustumPlanes);
+                if (Skin != 0)
+                {
+                    for (int i = 0; i < 6; i++)
+                    {
+                        ref var plane = ref frustumPlanes[i];
+                        plane.distance += Skin;
+                    }
+                }
                 cameraLocalToWorldMatrix = referenceCamera.transform.localToWorldMatrix;
             }
         }
