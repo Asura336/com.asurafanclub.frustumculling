@@ -1,6 +1,6 @@
 {
   "name": "com.asurafanclub.frustumculling",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "displayName": "FrustrumCulling",
   "description": "提供相机视锥体剔除和基于视口空间高度的LOD功能",
   "unity": "2022.3",
