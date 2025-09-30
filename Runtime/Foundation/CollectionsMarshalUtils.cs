@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Collections.LowLevel.Unsafe;
 
 namespace Com.Culling
 {
@@ -74,7 +75,7 @@ namespace Com.Culling
             }
 
             // list._version++;
-            ref readonly var listData = ref Unsafe.As<List<T>, ListDataHelper<T>>(ref target);
+            ref readonly var listData = ref UnsafeUtility.As<List<T>, ListDataHelper<T>>(ref target);
             ref int version = ref listData._version;
             version++;
 
